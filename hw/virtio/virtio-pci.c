@@ -19,6 +19,7 @@
 
 #include "hw/virtio/virtio.h"
 #include "hw/virtio/virtio-blk.h"
+#include "hw/virtio/virtio-kfd.h"
 #include "hw/virtio/virtio-net.h"
 #include "hw/virtio/virtio-serial.h"
 #include "hw/virtio/virtio-scsi.h"
@@ -112,7 +113,7 @@ static void virtio_pci_notify(DeviceState *d, uint16_t vector)
     VirtIOPCIProxy *proxy = to_virtio_pci_proxy_fast(d);
 
     if (msix_enabled(&proxy->pci_dev))
-        msix_notify(&proxy->pci_dev, vector);
+        msix_notify(&proxy->pci_dev, vector);       // here
     else {
         VirtIODevice *vdev = virtio_bus_get_device(&proxy->bus);
         pci_set_irq(&proxy->pci_dev, vdev->isr & 1);
@@ -280,6 +281,7 @@ static void virtio_ioport_write(void *opaque, uint32_t addr, uint32_t val)
         virtio_set_features(vdev, val);
         break;
     case VIRTIO_PCI_QUEUE_PFN:
+        printf("%s VIRTIO_PCI_QUEUE_PFN\n", vdev->name);
         pa = (hwaddr)val << VIRTIO_PCI_QUEUE_ADDR_SHIFT;
         if (pa == 0) {
             virtio_pci_stop_ioeventfd(proxy);
@@ -294,6 +296,7 @@ static void virtio_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             vdev->queue_sel = val;
         break;
     case VIRTIO_PCI_QUEUE_NOTIFY:
+        printf("%s VIRTIO_PCI_QUEUE_NOTIFY\n", vdev->name);
         if (val < VIRTIO_PCI_QUEUE_MAX) {
             virtio_queue_notify(vdev, val);
         }
@@ -330,6 +333,7 @@ static void virtio_ioport_write(void *opaque, uint32_t addr, uint32_t val)
         vdev->config_vector = val;
         break;
     case VIRTIO_MSI_QUEUE_VECTOR:
+        printf("%s VIRTIO_MSI_QUEUE_VECTOR vq[%d] %d\n", vdev->name, vdev->queue_sel, val);
         msix_vector_unuse(&proxy->pci_dev,
                           virtio_queue_vector(vdev, vdev->queue_sel));
         /* Make it possible for guest to discover an error took place. */
@@ -1064,6 +1068,61 @@ static const TypeInfo virtio_pci_info = {
     .abstract      = true,
 };
 
+/* virtio-kfd-pci */
+
+static Property virtio_kfd_pci_properties[] = {
+    DEFINE_PROP_UINT32("class", VirtIOPCIProxy, class_code, 0),
+    DEFINE_PROP_BIT("ioeventfd", VirtIOPCIProxy, flags,
+                    VIRTIO_PCI_FLAG_USE_IOEVENTFD_BIT, true),
+    DEFINE_PROP_UINT32("vectors", VirtIOPCIProxy, nvectors, 2),
+    DEFINE_PROP_END_OF_LIST(),
+};
+
+static int virtio_kfd_pci_init(VirtIOPCIProxy *vpci_dev)
+{
+    VirtIOKfdPCI *dev = VIRTIO_KFD_PCI(vpci_dev);
+    DeviceState *vdev = DEVICE(&dev->vdev);
+    qdev_set_parent_bus(vdev, BUS(&vpci_dev->bus));
+    if (qdev_init(vdev) < 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static void virtio_kfd_pci_class_init(ObjectClass *klass, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(klass);
+    VirtioPCIClass *k = VIRTIO_PCI_CLASS(klass);
+    PCIDeviceClass *pcidev_k = PCI_DEVICE_CLASS(klass);
+
+    set_bit(DEVICE_CATEGORY_MISC, dc->categories);
+    dc->props = virtio_kfd_pci_properties;
+    k->init = virtio_kfd_pci_init;
+    pcidev_k->vendor_id = PCI_VENDOR_ID_REDHAT_QUMRANET;
+    pcidev_k->device_id = PCI_DEVICE_ID_VIRTIO_KFD;
+    pcidev_k->revision = VIRTIO_PCI_ABI_VERSION;
+    pcidev_k->class_id = PCI_CLASS_OTHERS;
+}
+
+static void virtio_kfd_pci_instance_init(Object *obj)
+{
+    VirtIOKfdPCI *dev = VIRTIO_KFD_PCI(obj);
+    object_initialize(&dev->vdev, sizeof(dev->vdev), TYPE_VIRTIO_KFD);
+    object_property_add_child(obj, "virtio-backend", OBJECT(&dev->vdev), NULL);
+    object_unref(OBJECT(&dev->vdev));
+    qdev_alias_all_properties(DEVICE(&dev->vdev), obj);
+    object_property_add_alias(obj, "iothread", OBJECT(&dev->vdev),"iothread",
+                              &error_abort);
+}
+
+static const TypeInfo virtio_kfd_pci_info = {
+    .name          = TYPE_VIRTIO_KFD_PCI,
+    .parent        = TYPE_VIRTIO_PCI,
+    .instance_size = sizeof(VirtIOKfdPCI),
+    .instance_init = virtio_kfd_pci_instance_init,
+    .class_init    = virtio_kfd_pci_class_init,
+};
+
 /* virtio-blk-pci */
 
 static Property virtio_blk_pci_properties[] = {
@@ -1579,6 +1638,7 @@ static void virtio_pci_register_types(void)
     type_register_static(&virtio_9p_pci_info);
 #endif
     type_register_static(&virtio_blk_pci_info);
+    type_register_static(&virtio_kfd_pci_info);
     type_register_static(&virtio_scsi_pci_info);
     type_register_static(&virtio_balloon_pci_info);
     type_register_static(&virtio_serial_pci_info);

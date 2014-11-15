@@ -252,6 +252,7 @@ static void virtio_mmio_write(void *opaque, hwaddr offset, uint64_t value,
         virtio_queue_set_align(vdev, vdev->queue_sel, value);
         break;
     case VIRTIO_MMIO_QUEUEPFN:
+        printf("%s VIRTIO_MMIO_QUEUEPFN\n", vdev->name);
         if (value == 0) {
             virtio_reset(vdev);
         } else {
@@ -260,6 +261,7 @@ static void virtio_mmio_write(void *opaque, hwaddr offset, uint64_t value,
         }
         break;
     case VIRTIO_MMIO_QUEUENOTIFY:
+        printf("%s VIRTIO_MMIO_QUEUENOTIFY\n", vdev->name);
         if (value < VIRTIO_PCI_QUEUE_MAX) {
             virtio_queue_notify(vdev, value);
         }

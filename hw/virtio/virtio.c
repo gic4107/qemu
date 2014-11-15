@@ -532,7 +532,7 @@ static void virtio_notify_vector(VirtIODevice *vdev, uint16_t vector)
     VirtioBusClass *k = VIRTIO_BUS_GET_CLASS(qbus);
 
     if (k->notify) {
-        k->notify(qbus->parent, vector);
+        k->notify(qbus->parent, vector);    // virtio_pci_notify
     }
 }
 

@@ -38,6 +38,7 @@ typedef struct QDevAlias
 
 static const QDevAlias qdev_alias_table[] = {
     { "virtio-blk-pci", "virtio-blk", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
+    { "virtio-kfd-pci", "virtio-kfd", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
     { "virtio-net-pci", "virtio-net", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
     { "virtio-serial-pci", "virtio-serial", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
     { "virtio-balloon-pci", "virtio-balloon",
@@ -521,7 +522,7 @@ DeviceState *qdev_device_add(QemuOpts *opts)
     }
 
     /* create device */
-    dev = DEVICE(object_new(driver));
+    dev = DEVICE(object_new(driver));       // call instance_init
 
     if (bus) {
         qdev_set_parent_bus(dev, bus);
@@ -551,7 +552,7 @@ DeviceState *qdev_device_add(QemuOpts *opts)
     }
 
     dev->opts = opts;
-    object_property_set_bool(OBJECT(dev), true, "realized", &err);
+    object_property_set_bool(OBJECT(dev), true, "realized", &err);      // call device_set_realize and realize
     if (err != NULL) {
         qerror_report_err(err);
         error_free(err);

@@ -1133,7 +1133,7 @@ int kvm_irqchip_send_msi(KVMState *s, MSIMessage msg)
         msi.flags = 0;
         memset(msi.pad, 0, sizeof(msi.pad));
 
-        return kvm_vm_ioctl(s, KVM_SIGNAL_MSI, &msi);
+        return kvm_vm_ioctl(s, KVM_SIGNAL_MSI, &msi);       // here
     }
 
     route = kvm_lookup_msi_route(s, msg);

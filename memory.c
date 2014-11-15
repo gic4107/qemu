@@ -441,7 +441,7 @@ static void memory_region_write_accessor(MemoryRegion *mr,
     }
     tmp = (*value >> shift) & mask;
     trace_memory_region_ops_write(mr, addr, tmp, size);
-    mr->ops->write(mr->opaque, addr, tmp, size);
+    mr->ops->write(mr->opaque, addr, tmp, size);        // kvm_apic_mem_write
 }
 
 static void access_with_adjusted_size(hwaddr addr,
@@ -473,7 +473,7 @@ static void access_with_adjusted_size(hwaddr addr,
     access_mask = -1ULL >> (64 - access_size * 8);
     if (memory_region_big_endian(mr)) {
         for (i = 0; i < size; i += access_size) {
-            access(mr, addr + i, value, access_size,
+            access(mr, addr + i, value, access_size,        // memory_region_write_accessor
                    (size - access_size - i) * 8, access_mask);
         }
     } else {

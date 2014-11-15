@@ -17,6 +17,7 @@
 
 #include "hw/pci/msi.h"
 #include "hw/virtio/virtio-blk.h"
+#include "hw/virtio/virtio-kfd.h"
 #include "hw/virtio/virtio-net.h"
 #include "hw/virtio/virtio-rng.h"
 #include "hw/virtio/virtio-serial.h"
@@ -33,6 +34,7 @@
 
 typedef struct VirtIOPCIProxy VirtIOPCIProxy;
 typedef struct VirtIOBlkPCI VirtIOBlkPCI;
+typedef struct VirtIOKfdPCI VirtIOKfdPCI;
 typedef struct VirtIOSCSIPCI VirtIOSCSIPCI;
 typedef struct VirtIOBalloonPCI VirtIOBalloonPCI;
 typedef struct VirtIOSerialPCI VirtIOSerialPCI;
@@ -131,6 +133,18 @@ struct VHostSCSIPCI {
 struct VirtIOBlkPCI {
     VirtIOPCIProxy parent_obj;
     VirtIOBlock vdev;
+};
+
+/*
+ * virtio-kfd-pci: This extends VirtioPCIProxy.
+ */
+#define TYPE_VIRTIO_KFD_PCI "virtio-kfd-pci"
+#define VIRTIO_KFD_PCI(obj) \
+        OBJECT_CHECK(VirtIOBlkPCI, (obj), TYPE_VIRTIO_KFD_PCI)
+
+struct VirtIOKfdPCI {
+    VirtIOPCIProxy parent_obj;
+    VirtIOKfd vdev;
 };
 
 /*

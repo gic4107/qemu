@@ -628,7 +628,6 @@ ObjectClass *object_class_get_parent(ObjectClass *class)
     if (!type) {
         return NULL;
     }
-
     type_initialize(type);
 
     return type->class;

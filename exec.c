@@ -2634,7 +2634,7 @@ static inline void stl_phys_internal(AddressSpace *as,
             val = bswap32(val);
         }
 #endif
-        io_mem_write(mr, addr1, val, 4);
+        io_mem_write(mr, addr1, val, 4);        // here
     } else {
         /* RAM case */
         addr1 += memory_region_get_ram_addr(mr) & TARGET_PAGE_MASK;

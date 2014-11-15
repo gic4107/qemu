@@ -112,6 +112,12 @@ virtio_blk_rw_complete(void *req, int ret) "req %p ret %d"
 virtio_blk_handle_write(void *req, uint64_t sector, size_t nsectors) "req %p sector %"PRIu64" nsectors %zu"
 virtio_blk_handle_read(void *req, uint64_t sector, size_t nsectors) "req %p sector %"PRIu64" nsectors %zu"
 
+# hw/kfd/virtio-kfd.c
+virtio_kfd_req_complete(void *req, int status) "req %p status %d"
+virtio_kfd_rw_complete(void *req, int ret) "req %p ret %d"
+virtio_kfd_handle_write(void *req, uint64_t sector, size_t nsectors) "req %p sector %"PRIu64" nsectors %zu"
+virtio_kfd_handle_read(void *req, uint64_t sector, size_t nsectors) "req %p sector %"PRIu64" nsectors %zu"
+
 # hw/block/dataplane/virtio-blk.c
 virtio_blk_data_plane_start(void *s) "dataplane %p"
 virtio_blk_data_plane_stop(void *s) "dataplane %p"
