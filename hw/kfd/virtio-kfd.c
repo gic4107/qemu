@@ -137,24 +137,24 @@ static int virtkfd_get_sysinfo(struct iovec *param)
         if(!strstr(output, str_i))
             break;
     }
-    sys_info.topology_device.node_count = i;
-    printf("node count=%d\n", sys_info.topology_device.node_count);
+    sys_info.node_count = i;
+    printf("node count=%d\n", sys_info.node_count);
         
     // for each node
     int node;
-    for(node=0; node<sys_info.topology_device.node_count; node++) {
+    for(node=0; node<sys_info.node_count; node++) {
         // gpu_id
         fd = popen("cat /sys/dev/char/250\:0/topology/nodes/0/gpu_id", "r");
         fgets(output, 1000, fd);
         printf("gpu_id=%d\n", atoi(output));
-        sys_info.topology_device.gpu_id = atoi(output);
+        sys_info.topology_device[node].gpu_id = atoi(output);
         pclose(fd);
 
         // name
         fd = popen("cat /sys/dev/char/250\:0/topology/nodes/0/name", "r");
         fgets(output, 1000, fd);
         printf("name=%s\n", output);
-        strcpy(sys_info.topology_device.name, output);
+        strcpy(sys_info.topology_device[node].name, output);
         pclose(fd);
         
         // properties
@@ -163,127 +163,127 @@ static int virtkfd_get_sysinfo(struct iovec *param)
             if(strstr(output, "cpu_cores_count")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("cpu_cores_count=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].cpu_cores_count = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.cpu_cores_count = atoi(output+i); 
             }
             else if(strstr(output, "simd_count")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("simd_count=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].simd_count = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.simd_count = atoi(output+i); 
             }
             else if(strstr(output, "mem_banks_count")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("mem_banks_count=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].mem_banks_count = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.mem_banks_count = atoi(output+i); 
             }
             else if(strstr(output, "caches_count")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("caches_count=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].caches_count = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.caches_count = atoi(output+i); 
             }
             else if(strstr(output, "io_links_count")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("io_links_count=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].io_links_count = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.io_links_count = atoi(output+i); 
             }
             else if(strstr(output, "cpu_core_id_base")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("cpu_core_id_base=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].cpu_core_id_base = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.cpu_core_id_base = atoi(output+i); 
             }
             else if(strstr(output, "simd_id_base")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("simd_id_base=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].simd_id_base = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.simd_id_base = atoi(output+i); 
             }
             else if(strstr(output, "capability")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("capability=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].capability = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.capability = atoi(output+i); 
             }
             else if(strstr(output, "max_waves_per_simd")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("max_waves_per_simd=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].max_waves_per_simd = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.max_waves_per_simd = atoi(output+i); 
             }
             else if(strstr(output, "lds_size_in_kb")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("lds_size_in_kb=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].lds_size_in_kb = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.lds_size_in_kb = atoi(output+i); 
             }
             else if(strstr(output, "gds_size_in_kb")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("gds_size_in_kb=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].gds_size_in_kb = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.gds_size_in_kb = atoi(output+i); 
             }
             else if(strstr(output, "wave_front_size")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("wave_front_size=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].wave_front_size = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.wave_front_size = atoi(output+i); 
             }
             else if(strstr(output, "array_count")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("array_count=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].array_count = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.array_count = atoi(output+i); 
             }
             else if(strstr(output, "simd_arrays_per_engine")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("simd_arrays_per_engine=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].simd_arrays_per_engine = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.simd_arrays_per_engine = atoi(output+i); 
             }
             else if(strstr(output, "cu_per_simd_array")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("cu_per_simd_array=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].cu_per_simd_array = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.cu_per_simd_array = atoi(output+i); 
             }
             else if(strstr(output, "simd_per_cu")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("simd_per_cu=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].simd_per_cu = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.simd_per_cu = atoi(output+i); 
             }
             else if(strstr(output, "max_slots_scratch_cu")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("max_slots_scratch_cu=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].max_slots_scratch_cu = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.max_slots_scratch_cu = atoi(output+i); 
             }
             else if(strstr(output, "engine_id")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("engine_id=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].engine_id = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.engine_id = atoi(output+i); 
             }
             else if(strstr(output, "vendor_id")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("vendor_id=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].vendor_id = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.vendor_id = atoi(output+i); 
             }
             else if(strstr(output, "device_id")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("device_id=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].device_id = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.device_id = atoi(output+i); 
             }
             else if(strstr(output, "location_id")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("location_id=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].location_id = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.location_id = atoi(output+i); 
             }
             else if(strstr(output, "max_engine_clk_fcompute")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("max_engine_clk_fcompute=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].max_engine_clk_fcompute = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.max_engine_clk_fcompute = atoi(output+i); 
             }
             else if(strstr(output, "local_mem_size")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("local_mem_size=%lld\n", atoll(output+i));
-                sys_info.topology_device.node_properties[node].local_mem_size = atoll(output+i); 
+                sys_info.topology_device[node].node_properties.local_mem_size = atoll(output+i); 
             }
             else if(strstr(output, "max_engine_clk_ccompute")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("max_engine_clk_ccompute=%d\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].max_engine_clk_ccompute = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.max_engine_clk_ccompute = atoi(output+i); 
             }
 /*            else if(strstr(output, "marketing_name")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                 printf("marketing_name=%ld\n", atoi(output+i));
-                sys_info.topology_device.node_properties[node].marketing_name = atoi(output+i); 
+                sys_info.topology_device[node].node_properties.marketing_name = atoi(output+i); 
             }*/
             else {
                 printf("Known node properties %s\n", output);
@@ -298,15 +298,15 @@ static int virtkfd_get_sysinfo(struct iovec *param)
             return -1;
         }
         while(fgets(output, 1000, fd) != NULL) {
-            sys_info.topology_device.cache_count++;
+            sys_info.topology_device[node].cache_count++;
         }
-        printf("cache count=%d\n", sys_info.topology_device.cache_count);
+        printf("cache count=%d\n", sys_info.topology_device[node].cache_count);
         pclose(fd);
         
         // for each cache
         int cache;
         const char cache_cmd[COMMAND_LEN] = "cat /sys/dev/char/250\:0/topology/nodes/0/caches/";
-        for(cache=0; cache<sys_info.topology_device.cache_count; cache++) {
+        for(cache=0; cache<sys_info.topology_device[node].cache_count; cache++) {
             char cmd[COMMAND_LEN];
             char str_cache[2];
             sprintf(str_cache, "%d", cache);
@@ -319,49 +319,54 @@ static int virtkfd_get_sysinfo(struct iovec *param)
                 if(strstr(output, "processor_id_low")) {
                     for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                     printf("processor_id_low=%d\n", atoi(output+i));
-                    sys_info.topology_device.cache_properties[cache].processor_id_low = atoi(output+i); 
+                    sys_info.topology_device[node].cache_properties[cache].processor_id_low = atoi(output+i); 
                 }
                 else if(strstr(output, "level")) {
                     for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                     printf("cache_level=%d\n", atoi(output+i));
-                    sys_info.topology_device.cache_properties[cache].cache_level = atoi(output+i); 
+                    sys_info.topology_device[node].cache_properties[cache].cache_level = atoi(output+i); 
                 }
                 else if(strstr(output, "cache_line_size")) {        // must before "size", because the strstr!
                     for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                     printf("cacheline_size=%d\n", atoi(output+i));
-                    sys_info.topology_device.cache_properties[cache].cacheline_size = atoi(output+i); 
+                    sys_info.topology_device[node].cache_properties[cache].cacheline_size = atoi(output+i); 
                 }
                 else if(strstr(output, "size")) {
                     for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                     printf("cache_size=%d\n", atoi(output+i));
-                    sys_info.topology_device.cache_properties[cache].cache_size = atoi(output+i); 
+                    sys_info.topology_device[node].cache_properties[cache].cache_size = atoi(output+i); 
                 }
                 else if(strstr(output, "cache_lines_per_tag")) {
                     for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                     printf("cachelines_per_tag=%d\n", atoi(output+i));
-                    sys_info.topology_device.cache_properties[cache].cachelines_per_tag = atoi(output+i); 
+                    sys_info.topology_device[node].cache_properties[cache].cachelines_per_tag = atoi(output+i); 
                 }
                 else if(strstr(output, "association")) {
                     for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                     printf("cache_assoc=%d\n", atoi(output+i));
-                    sys_info.topology_device.cache_properties[cache].cache_assoc = atoi(output+i); 
+                    sys_info.topology_device[node].cache_properties[cache].cache_assoc = atoi(output+i); 
                 }
                 else if(strstr(output, "latency")) {
                     for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                     printf("cache_latency=%d\n", atoi(output+i));
-                    sys_info.topology_device.cache_properties[cache].cache_latency = atoi(output+i); 
+                    sys_info.topology_device[node].cache_properties[cache].cache_latency = atoi(output+i); 
                 }
                 else if(strstr(output, "type")) {
                     for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                     printf("cache_type=%d\n", atoi(output+i));
-                    sys_info.topology_device.cache_properties[cache].cache_type = atoi(output+i); 
+                    sys_info.topology_device[node].cache_properties[cache].cache_type = atoi(output+i); 
                 }
-/*                else if(strstr(output, "sibling_map")) {
+                else if(strstr(output, "sibling_map")) {
+                    char *num_base;
+                    int index = 0;
                     for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
-                    printf("=%ld\n", atoi(output+i));
-                    sys_info.topology_device.cache_properties[cache]. = atoi(output+i); 
+                    num_base = output+i;
+                    for(index=0; index<KFD_TOPOLOGY_CPU_SIBLINGS; index++) {
+                        sys_info.topology_device[node].cache_properties[cache].sibling_map[index] = atoi(num_base);
+                        for(; *num_base!=','; num_base++);
+                        num_base++;
+                    }
                 }
-*/
                 else {
                     printf("Known cache properties\n");
                 }
@@ -376,15 +381,15 @@ static int virtkfd_get_sysinfo(struct iovec *param)
             return -1;
         }
         while(fgets(output, 1000, fd) != NULL) {
-            sys_info.topology_device.io_link_count++;
+            sys_info.topology_device[node].io_link_count++;
         }
-        printf("iolink count=%d\n", sys_info.topology_device.io_link_count);
+        printf("iolink count=%d\n", sys_info.topology_device[node].io_link_count);
         pclose(fd);
 
         // for each iolink
         int iolink;
         const char iolink_cmd[COMMAND_LEN] = "cat /sys/dev/char/250\:0/topology/nodes/0/io_links/";
-        for(iolink=0; iolink<sys_info.topology_device.io_link_count; iolink++) {
+        for(iolink=0; iolink<sys_info.topology_device[node].io_link_count; iolink++) {
             char cmd[COMMAND_LEN];
             char str_iolink[2];
             sprintf(str_iolink, "%d", iolink);
@@ -400,15 +405,15 @@ static int virtkfd_get_sysinfo(struct iovec *param)
             return -1;
         }
         while(fgets(output, 1000, fd) != NULL) {
-            sys_info.topology_device.mem_bank_count++;
+            sys_info.topology_device[node].mem_bank_count++;
         }
-        printf("membank count=%d\n", sys_info.topology_device.mem_bank_count);
+        printf("membank count=%d\n", sys_info.topology_device[node].mem_bank_count);
         pclose(fd);
 
         // for each membank
         int membank;
         const char membank_cmd[COMMAND_LEN] = "cat /sys/dev/char/250\:0/topology/nodes/0/mem_banks/";
-        for(membank=0; membank<sys_info.topology_device.mem_bank_count; membank++) {
+        for(membank=0; membank<sys_info.topology_device[node].mem_bank_count; membank++) {
             char cmd[COMMAND_LEN];
             char str_membank[2];
             sprintf(str_membank, "%d", membank);
@@ -421,27 +426,27 @@ static int virtkfd_get_sysinfo(struct iovec *param)
                 if(strstr(output, "heap_type")) {
                     for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                     printf("heap_type=%d\n", atoi(output+i));
-                    sys_info.topology_device.mem_properties[membank].heap_type = atoi(output+i); 
+                    sys_info.topology_device[node].mem_properties[membank].heap_type = atoi(output+i); 
                 }
                 else if(strstr(output, "size_in_bytes")) {
                     for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                     printf("size_in_bytes=%lld\n", atoll(output+i));
-                    sys_info.topology_device.mem_properties[membank].size_in_bytes = atoll(output+i); 
+                    sys_info.topology_device[node].mem_properties[membank].size_in_bytes = atoll(output+i); 
                 }
                 else if(strstr(output, "flags")) {
                     for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                     printf("flags=%d\n", atoi(output+i));
-                    sys_info.topology_device.mem_properties[membank].flags = atoi(output+i); 
+                    sys_info.topology_device[node].mem_properties[membank].flags = atoi(output+i); 
                 }
                 else if(strstr(output, "width")) {
                     for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                     printf("width=%d\n", atoi(output+i));
-                    sys_info.topology_device.mem_properties[membank].width = atoi(output+i); 
+                    sys_info.topology_device[node].mem_properties[membank].width = atoi(output+i); 
                 }
                 else if(strstr(output, "mem_clk_max")) {
                     for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
                     printf("mem_clk_max=%d\n", atoi(output+i));
-                    sys_info.topology_device.mem_properties[membank].mem_clk_max = atoi(output+i); 
+                    sys_info.topology_device[node].mem_properties[membank].mem_clk_max = atoi(output+i); 
                 }
                 else {
                     printf("Known membank properties\n");
