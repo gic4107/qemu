@@ -58,6 +58,7 @@ struct virtio_kfd_config
 struct virtio_kfd_outhdr
 {
     uint32_t cmd;
+    uint64_t match;
 };
 
 #define VIRTIO_KFD_S_OK         0
@@ -102,7 +103,6 @@ typedef struct VirtIOKfdReq {
     VirtIOKfd *dev;
     VirtQueueElement elem;
     struct virtio_kfd_inhdr *in;
-//    struct virtio_kfd_out_param param;
     struct iovec param; 
     struct virtio_kfd_outhdr out;
     QEMUIOVector qiov;

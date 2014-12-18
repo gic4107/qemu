@@ -1,1 +1,2 @@
-obj-$(CONFIG_VIRTIO) += virtio-kfd.o
+obj-$(CONFIG_VIRTIO) += virtio-kfd.o 
+forwarder: forwarder.c forwarder.h
