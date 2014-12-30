@@ -21,11 +21,17 @@
 
 #include <linux/kfd_ioctl.h>
 #include <sys/mman.h>
+#include <fcntl.h>
 #include "virtio_kfd_priv.h"
+#include "vm_process.h"
 #include "shadow_process.h"
 
 #define SHADOW_PROCESS_NUM 100
 #define COMMAND_LEN 100
+
+static int kfd_fd;
+
+static struct vm_process vm_processes[VM_PROCESS_NUM];
 
 static struct shadow_process shadow_processes[SHADOW_PROCESS_NUM];
 static int shadow_process_count;
@@ -199,6 +205,166 @@ error_shm:
     return ret;
 }
 
+#define HASHING(x) ((x)/4) % VM_PROCESS_NUM
+
+static int insert_vm_process(uint64_t match)
+{
+    int hash = HASHING(match);
+    int i = 0;
+
+    while (vm_processes[hash].match != 0) {
+        if(++i > VM_PROCESS_NUM)
+            return -1;
+        hash = (hash+1) % VM_PROCESS_NUM;
+    } 
+    vm_processes[hash].match = match;
+
+    return 1;
+}
+
+static void free_doorbell_region(struct vm_process *p)
+{
+    munmap(p->doorbell_region_hva, VM_PROCESS_DOORBELL_REGION_SIZE);
+    cpu_physical_memory_unmap(p->doorbell_region_hva, 
+        VM_PROCESS_DOORBELL_REGION_SIZE, 1, VM_PROCESS_DOORBELL_REGION_SIZE); 
+}   
+
+static int free_vm_process(uint64_t match)
+{
+    int hash = HASHING(match);
+    int i = 0;
+
+    while (vm_processes[hash].match != match) {
+        if(++i > VM_PROCESS_NUM)
+            return -1;
+        hash = (hash+1) % VM_PROCESS_NUM;
+    } 
+    vm_processes[hash].match = 0;
+
+    free_doorbell_region(&vm_processes[hash]);
+
+    return 1;
+}
+
+struct vm_process* find_vm_process(uint64_t match)
+{
+    int hash = HASHING(match);
+    int i = 0;
+
+    while (vm_processes[hash].match != match) {
+        if(++i > VM_PROCESS_NUM)
+            return -1;
+        hash = (hash+1) % VM_PROCESS_NUM;
+    } 
+
+    return &vm_processes[hash];
+}
+
+static int 
+virtkfd_mmap_doorbell(struct iovec *doorbell_region_gpa, uint64_t match)
+{
+    uint64_t vm_process_doorbell_region_gpa;
+    void *vm_process_doorbell_region_hva;    
+    struct vm_process *p;
+    size_t vm_process_doorbell_region_size = VM_PROCESS_DOORBELL_REGION_SIZE;
+    int i;
+
+    // get vm_mm from front-end
+    iov_to_buf(doorbell_region_gpa, 1, 0, &vm_process_doorbell_region_gpa, sizeof(vm_process_doorbell_region_gpa));
+    vm_process_doorbell_region_gpa &= GPA_TO_HVA_MASK; 
+
+    vm_process_doorbell_region_hva = cpu_physical_memory_map(vm_process_doorbell_region_gpa, &vm_process_doorbell_region_size, 1);
+    if(vm_process_doorbell_region_size != VM_PROCESS_DOORBELL_REGION_SIZE) {
+        fprintf(stderr, "!!! doorbell region mapped size not equal to 4096\n");
+        goto fault_unmmap;
+    }
+
+    for(i=0; i<VM_PROCESS_DOORBELL_REGION_SIZE; i++) {
+        if( *(char*)(vm_process_doorbell_region_hva+i) != '-') {
+            fprintf(stderr, "!!! doorbell region magic number fail\n");
+            goto fault_unmmap;
+        }
+    }
+
+    // mmap to host KFD
+    while(ioctl(kfd_fd, KFD_IOC_VM_VIRTIO_BE_BIND_VM_PROCESS, &match) < 0);     
+
+    void *ptr = mmap(vm_process_doorbell_region_hva, VM_PROCESS_DOORBELL_REGION_SIZE, 
+                PROT_WRITE|PROT_READ, MAP_SHARED|MAP_FIXED, kfd_fd, 0);
+    if(ptr == MAP_FAILED) {
+        printf("mmap fail\n");                                                       
+        goto fault_unmmap;
+    }
+    else                                                                             
+        printf("mmap succ %p %p\n", vm_process_doorbell_region_hva, ptr);  
+
+//    *(int*)ptr = 3;
+
+    if (ioctl(kfd_fd, KFD_IOC_VM_VIRTIO_BE_UNBIND_VM_PROCESS) < 0) {
+        printf("KFD_IOC_VM_VIRTIO_BE_UNBIND_VM_PROCESS fail\n");
+        goto fault_mmap;
+    }
+
+    // set to vm_process 
+    p = find_vm_process(match);
+    if(p == NULL)
+        goto fault_mmap;
+    p->doorbell_region_hva = vm_process_doorbell_region_hva; 
+    return 1;
+
+fault_mmap:
+    munmap(vm_process_doorbell_region_hva, VM_PROCESS_DOORBELL_REGION_SIZE);
+fault_unmmap:
+    cpu_physical_memory_unmap(vm_process_doorbell_region_hva, 
+        vm_process_doorbell_region_size, 1, vm_process_doorbell_region_size); 
+    return -EFAULT;
+}
+
+static int virtkfd_create_vm_process(struct iovec *param)
+{
+    uint64_t match;
+
+    // get vm_mm from front-end
+    iov_to_buf(param, 1, 0, &match, sizeof(match));
+    printf("match=0x%llx\n", match); 
+
+    if (ioctl(kfd_fd, KFD_IOC_VM_CREATE_PROCESS, &match) < 0) {
+        printf("KFD_IOC_VM_CREATE_PROCESS fail\n");
+        return -1;
+    }
+
+    if (insert_vm_process(match) < 0) {
+        printf("vm processes full\n");
+        ioctl(kfd_fd, KFD_IOC_VM_CLOSE_PROCESS, &match);
+        return -1;
+    }
+
+    printf("virtkfd_create_vm_process success\n");
+    return 1;
+}
+
+static int virtkfd_close_vm_process(struct iovec *param)
+{
+    uint64_t match;
+
+    // get vm_mm from front-end
+    iov_to_buf(param, 1, 0, &match, sizeof(match));
+    printf("match=0x%llx\n", match); 
+
+    if (free_vm_process(match) < 0) {
+        printf("vm processes not exist\n");
+        return -1;
+    }
+
+    if (ioctl(kfd_fd, KFD_IOC_VM_CLOSE_PROCESS, &match) < 0) {
+        printf("KFD_IOC_VM_CLOSE_PROCESS fail\n");
+        return -1;
+    }
+
+    printf("virtkfd_close_vm_process success\n");
+    return 1;
+}
+
 static int virtkfd_close_shadow_process(struct iovec *param)
 {
     uint64_t match;
@@ -215,6 +381,8 @@ static int virtkfd_close_shadow_process(struct iovec *param)
     munmap(shadow_process->shmem, SHMEM_SIZE);
     shm_unlink(shadow_process->shm_name); 
     shadow_process_count--;
+
+    return 1;
 }
 
 static int virtkfd_get_sysinfo(struct iovec *param)
@@ -223,12 +391,12 @@ static int virtkfd_get_sysinfo(struct iovec *param)
     int i;
     FILE *fd;
     char output[1000];
-    const char cat_sysfs[100] = "cat /sys/dev/char/250\:0/topology/";
+    const char cat_sysfs[100] = "cat /sys/devices/virtual/kfd/kfd/topology/";
     char path[100];
 
     memset(&sys_info, 0, sizeof(sys_info));
     // generation_id
-    fd = popen("cat /sys/dev/char/250\:0/topology/generation_id", "r");
+    fd = popen("cat /sys/devices/virtual/kfd/kfd/topology/generation_id", "r");
     if(!fd) {
         printf("fail to get generation_id\n");
         return -1;
@@ -238,7 +406,7 @@ static int virtkfd_get_sysinfo(struct iovec *param)
     pclose(fd);
 
     // system_properties
-    fd = popen("cat /sys/dev/char/250\:0/topology/system_properties", "r");
+    fd = popen("cat /sys/devices/virtual/kfd/kfd/topology/system_properties", "r");
     if(!fd) {
         printf("fail to get system_properties\n");
         return -1;
@@ -264,7 +432,7 @@ static int virtkfd_get_sysinfo(struct iovec *param)
     pclose(fd);
 
     // node count
-    fd = popen("ls /sys/dev/char/250\:0/topology/nodes/", "r");
+    fd = popen("ls /sys/devices/virtual/kfd/kfd/topology/nodes/", "r");
     if(!fd) {
         printf("fail to get node number\n");
         return -1;
@@ -282,19 +450,19 @@ static int virtkfd_get_sysinfo(struct iovec *param)
     int node;
     for(node=0; node<sys_info.node_count; node++) {
         // gpu_id
-        fd = popen("cat /sys/dev/char/250\:0/topology/nodes/0/gpu_id", "r");
+        fd = popen("cat /sys/devices/virtual/kfd/kfd/topology/nodes/0/gpu_id", "r");
         fgets(output, 1000, fd);
         sys_info.topology_device[node].gpu_id = atoi(output);
         pclose(fd);
 
         // name
-        fd = popen("cat /sys/dev/char/250\:0/topology/nodes/0/name", "r");
+        fd = popen("cat /sys/devices/virtual/kfd/kfd/topology/nodes/0/name", "r");
         fgets(output, 1000, fd);
         strcpy(sys_info.topology_device[node].name, output);
         pclose(fd);
         
         // properties
-        fd = popen("cat /sys/dev/char/250\:0/topology/nodes/0/properties", "r");
+        fd = popen("cat /sys/devices/virtual/kfd/kfd/topology/nodes/0/properties", "r");
         while(fgets(output, 1000, fd) != NULL) {
             if(strstr(output, "cpu_cores_count")) {
                 for(i=0; !(output[i]>='0'&&output[i]<='9') && output[i]!='\0'; i++);
@@ -403,7 +571,7 @@ static int virtkfd_get_sysinfo(struct iovec *param)
         pclose(fd);
         
         // cache count
-        fd = popen("ls /sys/dev/char/250\:0/topology/nodes/0/caches", "r");
+        fd = popen("ls /sys/devices/virtual/kfd/kfd/topology/nodes/0/caches", "r");
         if(!fd) {
             printf("fail to get cache count\n");
             return -1;
@@ -415,7 +583,7 @@ static int virtkfd_get_sysinfo(struct iovec *param)
         
         // for each cache
         int cache;
-        const char cache_cmd[COMMAND_LEN] = "cat /sys/dev/char/250\:0/topology/nodes/0/caches/";
+        const char cache_cmd[COMMAND_LEN] = "cat /sys/devices/virtual/kfd/kfd/topology/nodes/0/caches/";
         for(cache=0; cache<sys_info.topology_device[node].cache_count; cache++) {
             char cmd[COMMAND_LEN];
             char str_cache[2];
@@ -477,7 +645,7 @@ static int virtkfd_get_sysinfo(struct iovec *param)
         }
 
         // iolink count
-        fd = popen("ls /sys/dev/char/250\:0/topology/nodes/0/io_links", "r");
+        fd = popen("ls /sys/devices/virtual/kfd/kfd/topology/nodes/0/io_links", "r");
         if(!fd) {
             printf("fail to get iolink count\n");
             return -1;
@@ -489,7 +657,7 @@ static int virtkfd_get_sysinfo(struct iovec *param)
 
         // for each iolink
         int iolink;
-        const char iolink_cmd[COMMAND_LEN] = "cat /sys/dev/char/250\:0/topology/nodes/0/io_links/";
+        const char iolink_cmd[COMMAND_LEN] = "cat /sys/devices/virtual/kfd/kfd/topology/nodes/0/io_links/";
         for(iolink=0; iolink<sys_info.topology_device[node].io_link_count; iolink++) {
             char cmd[COMMAND_LEN];
             char str_iolink[2];
@@ -500,7 +668,7 @@ static int virtkfd_get_sysinfo(struct iovec *param)
         }
 
         // membank count
-        fd = popen("ls /sys/dev/char/250\:0/topology/nodes/0/mem_banks", "r");
+        fd = popen("ls /sys/devices/virtual/kfd/kfd/topology/nodes/0/mem_banks", "r");
         if(!fd) {
             printf("fail to get membank count\n");
             return -1;
@@ -512,7 +680,7 @@ static int virtkfd_get_sysinfo(struct iovec *param)
 
         // for each membank
         int membank;
-        const char membank_cmd[COMMAND_LEN] = "cat /sys/dev/char/250\:0/topology/nodes/0/mem_banks/";
+        const char membank_cmd[COMMAND_LEN] = "cat /sys/devices/virtual/kfd/kfd/topology/nodes/0/mem_banks/";
         for(membank=0; membank<sys_info.topology_device[node].mem_bank_count; membank++) {
             char cmd[COMMAND_LEN];
             char str_membank[2];
@@ -721,7 +889,7 @@ void virtio_kfd_handle_request(VirtIOKfdReq *req)
     unsigned in_num = req->elem.in_num;
     unsigned out_num = req->elem.out_num;
     int status = VIRTIO_KFD_S_OK; 
-    int ret;
+    int ret = 0;
 
 //    printf("virtio_kfd_handle_request ... in_num=%d out_num=%d\n", in_num, out_num);
 //    printf("out_iov[0]: base=%p, len=%d\n", iov[0].iov_base, iov[0].iov_len);
@@ -761,59 +929,94 @@ void virtio_kfd_handle_request(VirtIOKfdReq *req)
     switch(req->out.cmd) {
     case VIRTKFD_OPEN:
         printf("VIRTKFD_OPEN\n");
-        ret = virtkfd_open_shadow_process(&req->param);
+        ret = virtkfd_create_vm_process(&req->param);
         if(ret == -1)
             status = VIRTIO_KFD_S_IOERR;
         break;        
+
     case VIRTKFD_CLOSE:
         printf("VIRTKFD_CLOSE\n");
-        ret = virtkfd_close_shadow_process(&req->param);
+        ret = virtkfd_close_vm_process(&req->param);
         break;
+
     case VIRTKFD_GET_SYSINFO:
         printf("VIRTKFD_GET_SYSINFO\n");
         ret = virtkfd_get_sysinfo(&req->param);
         if(ret == -1)
             status = VIRTIO_KFD_S_IOERR;
         break;
+
     case VIRTKFD_GET_VERSION:
-        printf("VIRTKFD_\n");
+        printf("VIRTKFD_GET_VERSION\n");
         break;
+
     case VIRTKFD_CREATE_QUEUE:
         printf("VIRTKFD_CREATE_QUEUE\n");
-        ret = virtkfd_send_shadow_process_command(&req->param, 
-                    sizeof(struct kfd_ioctl_create_queue_args), 
-                    SHADOW_PROCESS_CREATE_QUEUE, req->out.match); 
-        if(ret == -1)
+        struct kfd_ioctl_vm_create_queue_args cq_args;
+
+        iov_to_buf(&req->param, 1, 0, &cq_args.args, sizeof(cq_args.args));
+        cq_args.match = req->out.match;
+
+        if(ioctl(kfd_fd, KFD_IOC_VM_CREATE_QUEUE, &cq_args) < 0) {
+            printf("KFD_IOC_VM_CREATE_QUEUE fail\n");
             status = VIRTIO_KFD_S_IOERR;
+        }
+
+        printf("queue_id=%d\n", cq_args.args.queue_id);
+        printf("doorbell_address=0x%llx\n", cq_args.args.doorbell_address);
+        iov_from_buf(&req->param, 1, 0, &cq_args.args, sizeof(cq_args.args));
         break;
+
     case VIRTKFD_DESTROY_QUEUE:
         printf("VIRTKFD_DESTROY_QUEUE\n");
 
         break;
+
     case VIRTKFD_SET_MEMORY_POLICY:
         printf("VIRTKFD_SET_MEMORY_POLICY\n");
-        ret = virtkfd_send_shadow_process_command(&req->param, 
-                    sizeof(struct kfd_ioctl_set_memory_policy_args), 
-                    SHADOW_PROCESS_SET_MEMORY_POLICY, req->out.match); 
-        if(ret == -1)
+        struct kfd_ioctl_vm_set_memory_policy_args mp_args;
+
+        iov_to_buf(&req->param, 1, 0, &mp_args.args, sizeof(mp_args.args));
+        mp_args.match = req->out.match;
+
+        if(ioctl(kfd_fd, KFD_IOC_VM_SET_MEMORY_POLICY, &mp_args) < 0) {
+            printf("KFD_IOC_VM_SET_MEMORY_POLICY fail\n");
             status = VIRTIO_KFD_S_IOERR;
+        }
+
+        iov_from_buf(&req->param, 1, 0, &mp_args.args, sizeof(mp_args.args));
         break;
+
     case VIRTKFD_GET_CLOCK_COUNTERS:
         printf("VIRTKFD_GET_CLOCK_COUNTERS\n");
-        ret = virtkfd_send_shadow_process_command(&req->param, 
-                    sizeof(struct kfd_ioctl_get_clock_counters_args), 
-                    SHADOW_PROCESS_GET_CLOCK_COUNTERS, req->out.match); 
-        if(ret == -1)
+        struct kfd_ioctl_vm_get_clock_counters_args cc_args;
+
+        iov_to_buf(&req->param, 1, 0, &cc_args.args, sizeof(cc_args.args));
+        cc_args.match = req->out.match;
+
+        if(ioctl(kfd_fd, KFD_IOC_VM_GET_CLOCK_COUNTERS, &cc_args) < 0) {
+            printf("KFD_IOC_VM_GET_CLOCK_COUNTERS fail\n");
             status = VIRTIO_KFD_S_IOERR;
+        }
+
+        iov_from_buf(&req->param, 1, 0, &cc_args.args, sizeof(cc_args.args));
         break;
+
     case VIRTKFD_GET_PROCESS_APERTURES:
         printf("VIRTKFD_GET_PROCESS_APERTURES \n");
-        ret = virtkfd_send_shadow_process_command(&req->param, 
-                    sizeof(struct kfd_ioctl_get_process_apertures_args), 
-                    SHADOW_PROCESS_GET_PROCESS_APERTURES, req->out.match); 
-        if(ret == -1)
+        struct kfd_ioctl_vm_get_process_apertures_args pa_args;
+
+        iov_to_buf(&req->param, 1, 0, &pa_args.args, sizeof(pa_args.args));
+        pa_args.match = req->out.match;
+
+        if(ioctl(kfd_fd, KFD_IOC_VM_GET_PROCESS_APERTURES, &pa_args) < 0) {
+            printf("KFD_IOC_VM_GET_PROCESS_APERTURES fail\n");
             status = VIRTIO_KFD_S_IOERR;
+        }
+        
+        iov_from_buf(&req->param, 1, 0, &pa_args.args, sizeof(pa_args.args));
         break;
+
     case VIRTKFD_UPDATE_QUEUE:
         printf("VIRTKFD_UPDATE_QUEUE\n");
 
@@ -870,12 +1073,19 @@ void virtio_kfd_handle_request(VirtIOKfdReq *req)
         break;
     case VIRTKFD_CREATE_EVENT:
         printf("VIRTKFD_CREATE_EVENT\n");
-        ret = virtkfd_send_shadow_process_command(&req->param, 
-                    sizeof(struct kfd_ioctl_create_event_args), 
-                    SHADOW_PROCESS_CREATE_EVENT, req->out.match); 
-        if(ret == -1)
+        struct kfd_ioctl_vm_create_event_args ce_args;
+
+        iov_to_buf(&req->param, 1, 0, &ce_args.args, sizeof(ce_args.args));
+        ce_args.match = req->out.match;
+
+        if(ioctl(kfd_fd, KFD_IOC_VM_CREATE_EVENT, &ce_args) < 0) {
+            printf("KFD_IOC_VM_CREATE_EVENT fail\n");
             status = VIRTIO_KFD_S_IOERR;
+        }
+        
+        iov_from_buf(&req->param, 1, 0, &ce_args.args, sizeof(ce_args.args));
         break;
+
     case VIRTKFD_DESTROY_EVENT:
         printf("VIRTKFD_DESTROY_EVENT\n");
 
@@ -903,6 +1113,12 @@ void virtio_kfd_handle_request(VirtIOKfdReq *req)
     case VIRTKFD_OPEN_GRAPHIC_HANDLE:
         printf("VIRTKFD_OPEN_GRAPHIC_HANDLE\n");
 
+        if(ret == -1)
+            status = VIRTIO_KFD_S_IOERR;
+        break;
+    case VIRTKFD_MMAP_DOORBELL_REGION:
+        printf("VIRTKFD_MMAP_DOORBELL_REGION\n");
+        ret = virtkfd_mmap_doorbell(&req->param, req->out.match);
         if(ret == -1)
             status = VIRTIO_KFD_S_IOERR;
         break;
@@ -1156,6 +1372,13 @@ static void virtio_kfd_device_realize(DeviceState *dev, Error **errp)
     s->change = qemu_add_vm_change_state_handler(virtio_kfd_vmstate_change_cb, s);
     register_savevm(dev, "virtio-kfd", virtio_kfd_id++, 2,
                     virtio_kfd_save, virtio_kfd_load, s);
+
+    // open host KFD
+    kfd_fd = open("/dev/kfd", O_RDWR);
+    if(kfd_fd == -1) 
+        printf("kfd_fd open fail\n");
+    if(ioctl(kfd_fd, KFD_IOC_VM_SET_VIRTIO_BE) < 0)
+        printf("KFD_IOC_VM_SET_VIRTIO_BE fail\n"); 
 }
 
 static void virtio_kfd_device_unrealize(DeviceState *dev, Error **errp)

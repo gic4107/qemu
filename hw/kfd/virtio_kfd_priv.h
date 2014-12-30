@@ -1,9 +1,13 @@
 #ifndef VIRTIO_KFD_PRIV_H
 #define VIRTIO_KFD_PRIV_H
 
+#define GPA_TO_HVA_MASK 0xffffffff
+
 #define KFD_TOPOLOGY_PUBLIC_NAME_SIZE 128
 #define KFD_TOPOLOGY_CPU_SIBLINGS 256
 #define PROPERTIES_NODE_MAX 5
+
+#define VM_PROCESS_DOORBELL_REGION_SIZE 4096
 
 // The command store inside virtqueue
 #define VIRTKFD_OPEN                    0
@@ -30,6 +34,7 @@
 #define VIRTKFD_RESET_EVENT             21
 #define VIRTKFD_WAIT_EVENTS             22
 #define VIRTKFD_OPEN_GRAPHIC_HANDLE     23
+#define VIRTKFD_MMAP_DOORBELL_REGION    24
 
 /*
     This file must sync with virtio_kfd_priv.h
