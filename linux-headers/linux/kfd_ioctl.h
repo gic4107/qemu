@@ -233,104 +233,110 @@ struct kfd_ioctl_open_graphic_handle_args {
 
 // Data structure for vm_process
 
+struct vm_process_info {
+    uint64_t vm_task;
+    uint64_t vm_mm;
+    uint64_t vm_pgd_gpa;
+};
+
 struct kfd_ioctl_vm_create_queue_args {
     struct kfd_ioctl_create_queue_args args;
-    uint64_t match;
+    uint64_t vm_mm;
 };
 
 struct kfd_ioctl_vm_destroy_queue_args {
     struct kfd_ioctl_destroy_queue_args args;
-    uint64_t match;
+    uint64_t vm_mm;
 };
 
 struct kfd_ioctl_vm_update_queue_args {
     struct kfd_ioctl_update_queue_args args;
-    uint64_t match;
+    uint64_t vm_mm;
 };
 
 struct kfd_ioctl_vm_set_memory_policy_args {
     struct kfd_ioctl_set_memory_policy_args args;
-    uint64_t match;
+    uint64_t vm_mm;
 };
 
 struct kfd_ioctl_vm_get_clock_counters_args {
     struct kfd_ioctl_get_clock_counters_args args;
-    uint64_t match;
+    uint64_t vm_mm;
 };
 
 struct kfd_ioctl_vm_get_process_apertures_args {
     struct kfd_ioctl_get_process_apertures_args args;
-    uint64_t match; 
+    uint64_t vm_mm; 
 };
 
 struct kfd_ioctl_vm_create_vidmem_args {
     struct kfd_ioctl_create_vidmem_args args;
-    uint64_t match; 
+    uint64_t vm_mm; 
 };
 
 struct kfd_ioctl_vm_destroy_vidmem_args {
     struct kfd_ioctl_destroy_vidmem_args args;
-    uint64_t match; 
+    uint64_t vm_mm; 
 };
 
 struct kfd_ioctl_vm_dbg_register_args {
     struct kfd_ioctl_dbg_register_args args;
-    uint64_t match; 
+    uint64_t vm_mm; 
 };
 
 struct kfd_ioctl_vm_dbg_unregister_args {
     struct kfd_ioctl_dbg_unregister_args args;
-    uint64_t match; 
+    uint64_t vm_mm; 
 };
 
 struct kfd_ioctl_vm_dbg_address_watch_args {
     struct kfd_ioctl_dbg_address_watch_args args;
-    uint64_t match; 
+    uint64_t vm_mm; 
 };
 
 struct kfd_ioctl_vm_dbg_wave_control_args {
     struct kfd_ioctl_dbg_wave_control_args args;
-    uint64_t match; 
+    uint64_t vm_mm; 
 };
 
 struct kfd_ioctl_vm_pmc_acquire_access_args {
     struct kfd_ioctl_pmc_acquire_access_args args;
-    uint64_t match; 
+    uint64_t vm_mm; 
 };
 
 struct kfd_ioctl_vm_pmc_release_access_args {
     struct kfd_ioctl_pmc_release_access_args args;
-    uint64_t match; 
+    uint64_t vm_mm; 
 };
 
 struct kfd_ioctl_vm_create_event_args {
     struct kfd_ioctl_create_event_args args;
-    uint64_t match; 
+    uint64_t vm_mm; 
 };
 
 struct kfd_ioctl_vm_destroy_event_args {
     struct kfd_ioctl_destroy_event_args args;
-    uint64_t match; 
+    uint64_t vm_mm; 
 };
 
 struct kfd_ioctl_vm_set_event_args {
     struct kfd_ioctl_set_event_args args;
-    uint64_t match; 
+    uint64_t vm_mm; 
 };
 
 struct kfd_ioctl_vm_reset_event_args {
     struct kfd_ioctl_reset_event_args args;
-    uint64_t match; 
+    uint64_t vm_mm; 
 };
 
 struct kfd_ioctl_vm_wait_events_args {
     struct kfd_ioctl_wait_events_args args;
-    uint64_t match; 
+    uint64_t vm_mm; 
 };
 
 struct kfd_ioctl_vm_open_graphic_handle_args {
     struct kfd_ioctl_open_graphic_handle_args args;
-    uint64_t match; 
+    uint64_t vm_mm; 
 };
 
 // IOCTL cmds for virtualization
@@ -360,6 +366,7 @@ struct kfd_ioctl_vm_open_graphic_handle_args {
 #define KFD_IOC_VM_CLOSE_PROCESS  	_IOW(KFD_IOC_MAGIC, 88, uint64_t)
 #define KFD_IOC_VM_VIRTIO_BE_BIND_VM_PROCESS      _IOW(KFD_IOC_MAGIC, 89, uint64_t)
 #define KFD_IOC_VM_VIRTIO_BE_UNBIND_VM_PROCESS    _IO(KFD_IOC_MAGIC, 90)
+#define KFD_IOC_SET_IOMMU_NESTED_CR3              _IOW(KFD_IOC_MAGIC, 91, uint32_t)
 
 #pragma pack(pop)
 

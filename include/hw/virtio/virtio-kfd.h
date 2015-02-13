@@ -58,7 +58,7 @@ struct virtio_kfd_config
 struct virtio_kfd_outhdr
 {
     uint32_t cmd;
-    uint64_t match;
+    uint64_t vm_mm;
 };
 
 #define VIRTIO_KFD_S_OK         0

@@ -1040,6 +1040,10 @@ struct kvm_s390_ucas_mapping {
 /* Available with KVM_CAP_PPC_RTAS */
 #define KVM_PPC_RTAS_DEFINE_TOKEN _IOW(KVMIO,  0xac, struct kvm_rtas_token_args)
 
+/* ioctl for HSA virtualization */
+#define KVM_HSA_SET_IOMMU_NESTED_CR3 _IOW(KVMIO, 0xd0, __u32)
+#define KVM_HSA_BIND_KFD_VIRTIO_BE   _IO(KVMIO, 0xd1) 
+
 /* ioctl for vm fd */
 #define KVM_CREATE_DEVICE	  _IOWR(KVMIO,  0xe0, struct kvm_create_device)
 

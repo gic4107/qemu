@@ -1485,7 +1485,7 @@ for flag in $gcc_flags; do
     # warning options).
     optflag="$(echo $flag | sed -e 's/^-Wno-/-W/')"
     if compile_prog "-Werror $optflag" "" ; then
-	QEMU_CFLAGS="$QEMU_CFLAGS $flag"
+    QEMU_CFLAGS="$QEMU_CFLAGS $flag"
     fi
 done
 
@@ -1820,12 +1820,12 @@ if test "$seccomp" != "no" ; then
     if $pkg_config --atleast-version=2.1.0 libseccomp; then
         libs_softmmu="$libs_softmmu `$pkg_config --libs libseccomp`"
         QEMU_CFLAGS="$QEMU_CFLAGS `$pkg_config --cflags libseccomp`"
-	seccomp="yes"
+    seccomp="yes"
     else
-	if test "$seccomp" = "yes"; then
+    if test "$seccomp" = "yes"; then
             feature_not_found "libseccomp" "Install libseccomp devel >= 2.1.0"
-	fi
-	seccomp="no"
+    fi
+    seccomp="no"
     fi
 fi
 ##########################################
@@ -2155,7 +2155,7 @@ EOF
          sdl_cflags="$sdl_cflags `aalib-config --cflags 2>/dev/null`"
       fi
       if compile_prog "$sdl_cflags" "$sdl_libs" ; then
-	:
+    :
       else
         sdl=no
       fi
@@ -2932,7 +2932,7 @@ fi
 # adjust virtio-blk-data-plane based on linux-aio
 
 if test "$virtio_blk_data_plane" = "yes" -a \
-	"$linux_aio" != "yes" ; then
+    "$linux_aio" != "yes" ; then
   error_exit "virtio-blk-data-plane requires Linux AIO, please try --enable-linux-aio"
 elif test -z "$virtio_blk_data_plane" ; then
   virtio_blk_data_plane=$linux_aio
@@ -3105,8 +3105,8 @@ cat > $TMPC << EOF
 int
 main(void)
 {
-	/* try to start inotify */
-	return inotify_init();
+    /* try to start inotify */
+    return inotify_init();
 }
 EOF
 if compile_prog "" "" ; then
@@ -3610,8 +3610,8 @@ if test "$mingw32" = "yes" -a "$guest_agent" != "no" -a "$vss_win32_sdk" != "no"
     *\ *) # The SDK is installed in "Program Files" by default, but we cannot
           # handle path with spaces. So we symlink the headers into ".sdk/vss".
           vss_win32_include="-I$source_path/.sdk/vss"
-	  symlink "$vss_win32_sdk/inc" "$source_path/.sdk/vss/inc"
-	  ;;
+      symlink "$vss_win32_sdk/inc" "$source_path/.sdk/vss/inc"
+      ;;
     *)    vss_win32_include="-I$vss_win32_sdk"
   esac
   cat > $TMPC << EOF
@@ -4014,9 +4014,9 @@ fi
 # enable/disable
 if test -z "$zero_malloc" ; then
     if test "$z_version" = "50" ; then
-	zero_malloc="no"
+    zero_malloc="no"
     else
-	zero_malloc="yes"
+    zero_malloc="yes"
     fi
 fi
 
@@ -5323,3 +5323,4 @@ echo >>config.status
 chmod +x config.status
 
 rm -r "$TMPDIR1"
+
