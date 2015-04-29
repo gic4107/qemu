@@ -19,7 +19,6 @@
 #include "hw/virtio/virtio-bus.h"
 #include "hw/virtio/virtio-access.h"
 
-#include <linux/kfd_ioctl.h>
 #include <linux/virtio_ids.h>
 #include <sys/mman.h>
 #include <fcntl.h>
@@ -31,16 +30,35 @@
 #include <linux/kvm.h>
 #include "sysemu/kvm.h"
 
+// for mqd mapping
+#include "cik_mqds.h"
+
 #define SHADOW_PROCESS_NUM 100
 #define COMMAND_LEN 100
 
+#define MQD_IOMMU 1
+
 static int kfd_fd;
+// FIXME: debug
+uint64_t debug_doorbell;
 
 static struct vm_process vm_processes[VM_PROCESS_NUM];
 
 static struct shadow_process shadow_processes[SHADOW_PROCESS_NUM];
 static int shadow_process_count;
 struct virtkfd_sysfs_info sys_info;
+
+void *identical_mapping_space;
+
+// FIXME: debug
+void dump_mqd(void *mqd)
+{
+    int i;
+
+    printf("===== dump_mqd ======\n");
+    for(i=0; i<sizeof(struct cik_mqd); i+=sizeof(uint32_t))
+        printf("%p: %x\n", mqd+i, *(uint32_t*)(mqd+i));
+}
 
 VirtIOKfdReq *virtio_kfd_alloc_request(VirtIOKfd *s)
 {
@@ -279,7 +297,6 @@ virtkfd_mmap_doorbell(struct iovec *doorbell_region_gpa, uint64_t vm_mm)
 
     // get vm_mm from front-end
     iov_to_buf(doorbell_region_gpa, 1, 0, &vm_process_doorbell_region_gpa, sizeof(vm_process_doorbell_region_gpa));
-//    vm_process_doorbell_region_gpa &= GPA_TO_HVA_MASK; 
 
     vm_process_doorbell_region_hva = cpu_physical_memory_map(vm_process_doorbell_region_gpa, &vm_process_doorbell_region_size, 1);
     if(vm_process_doorbell_region_size != VM_PROCESS_DOORBELL_REGION_SIZE) {
@@ -287,26 +304,22 @@ virtkfd_mmap_doorbell(struct iovec *doorbell_region_gpa, uint64_t vm_mm)
         goto fault_unmmap;
     }
 
-/*
-    for(i=0; i<VM_PROCESS_DOORBELL_REGION_SIZE; i++) {
-        if( *(char*)(vm_process_doorbell_region_hva+i) != '-') {
-            fprintf(stderr, "!!! doorbell region magic number fail\n");
-            goto fault_unmmap;
-        }
-    }
-*/
     // mmap to host KFD
     while(ioctl(kfd_fd, KFD_IOC_VM_VIRTIO_BE_BIND_VM_PROCESS, &vm_mm) < 0);     
 
-    printf("vm_process_doorbell_region_hva=%llx\n", vm_process_doorbell_region_hva);
+    printf("vm_process_doorbell_region gpa=%llx, hva=%llx\n", 
+                vm_process_doorbell_region_gpa, vm_process_doorbell_region_hva);
     void *ptr = mmap(vm_process_doorbell_region_hva, VM_PROCESS_DOORBELL_REGION_SIZE, 
                 PROT_WRITE|PROT_READ, MAP_SHARED|MAP_FIXED, kfd_fd, 0);
+//    void *ptr = mmap(vm_process_doorbell_region_hva, VM_PROCESS_DOORBELL_REGION_SIZE, 
+//                PROT_WRITE|PROT_READ, MAP_SHARED, kfd_fd, 0);
     if(ptr == MAP_FAILED) {
         printf("mmap fail\n");                                                       
         goto fault_unmmap;
     }
     else                                                                             
         printf("mmap succ %p %p\n", vm_process_doorbell_region_hva, ptr);  
+    debug_doorbell = (uint64_t)ptr;
 
     if (ioctl(kfd_fd, KFD_IOC_VM_VIRTIO_BE_UNBIND_VM_PROCESS) < 0) {
         printf("KFD_IOC_VM_VIRTIO_BE_UNBIND_VM_PROCESS fail\n");
@@ -900,7 +913,7 @@ void virtio_kfd_handle_request(VirtIOKfdReq *req)
     unsigned in_num = req->elem.in_num;
     unsigned out_num = req->elem.out_num;
     int status = VIRTIO_KFD_S_OK; 
-    int ret = 0;
+    int ret = VIRTIO_KFD_S_OK;
 
 //    printf("virtio_kfd_handle_request ... in_num=%d out_num=%d\n", in_num, out_num);
 //    printf("out_iov[0]: base=%p, len=%d\n", iov[0].iov_base, iov[0].iov_len);
@@ -964,21 +977,72 @@ void virtio_kfd_handle_request(VirtIOKfdReq *req)
     case VIRTKFD_CREATE_QUEUE:
         printf("VIRTKFD_CREATE_QUEUE\n");
         struct kfd_ioctl_vm_create_queue_args cq_args;
+#ifdef MQD_IOMMU
+        struct virtkfd_ioctl_create_queue_args vcq_args;
+#endif
+        uint64_t ring_gpa, ring_hva;
+        uint64_t rptr_gpa, rptr_hva;
+        uint64_t wptr_gpa, wptr_hva;
         uint32_t gpu_id;
+        uint64_t identical_hva;
+        size_t ptr_size = sizeof(uint64_t);
 
+        // region for guest mqd identical mapping
+        identical_mapping_space = valloc(4096);
+        memset(identical_mapping_space, 0, 4096);
+        identical_hva = (uint64_t)identical_mapping_space;
+        printf("identical_hva=%llx\n", identical_hva);
+        if (ioctl(kfd_fd, KFD_IOC_VM_IDENTICAL_HVA_SPACE, &identical_hva) < 0) {
+            printf("KFD_IOC_VM_IDENTICAL_HVA_SPACE fail\n");
+            status = VIRTIO_KFD_S_IOERR;
+        }
+
+        // create queue
+#ifdef MQD_IOMMU
+        iov_to_buf(&req->param, 1, 0, &vcq_args, sizeof(vcq_args));
+        memcpy(&cq_args.args, &vcq_args.args, sizeof(struct kfd_ioctl_create_queue_args));
+        cq_args.mqd_gva = vcq_args.mqd_gva;
+        cq_args.mqd_hva = cpu_physical_memory_map(vcq_args.mqd_gpa, &ptr_size, 1);
+        printf("mqd_gva=%llx, mqd_gpa=%llx, mqd_hva=%llx\n", cq_args.mqd_gva,
+                                             vcq_args.mqd_gpa, cq_args.mqd_hva);
+#else
         iov_to_buf(&req->param, 1, 0, &cq_args.args, sizeof(cq_args.args));
-        cq_args.vm_mm = req->out.vm_mm;
+#endif
+        cq_args.vm_mm   = req->out.vm_mm;
 
-        gpu_id = cq_args.args.gpu_id;
-        printf("VIRTKFD_CREATE_QUEUE: gpu_id=%d\n", gpu_id);
+        gpu_id   = cq_args.args.gpu_id;
+        ring_gpa = cq_args.args.ring_base_address;
+        rptr_gpa = cq_args.args.read_pointer_address;
+        wptr_gpa = cq_args.args.write_pointer_address;
+        
+        ring_hva = cpu_physical_memory_map(ring_gpa, &ptr_size, 1);
+        rptr_hva = cpu_physical_memory_map(rptr_gpa, &ptr_size, 1);
+        wptr_hva = cpu_physical_memory_map(wptr_gpa, &ptr_size, 1);
+        if (ptr_size != sizeof(uint64_t))
+            printf("!!! ptr translate fail\n");
 
+        printf("ring=%d, wprtr=%d, rptr=%d\n", *(int*)ring_hva, *(int*)wptr_hva, *(int*)rptr_hva);
+//        cq_args.args.ring_base_address     = ring_hva;
+//        cq_args.args.read_pointer_address  = rptr_hva;
+//        cq_args.args.write_pointer_address = wptr_hva;
+
+        printf("gpu_id=%d\n", gpu_id);
+//        printf("ring: %llx->%llx\n", ring_gpa, ring_hva);
+        printf("rptr: %llx->%llx\n", rptr_gpa, rptr_hva);
+        printf("wptr: %llx->%llx\n", wptr_gpa, wptr_hva);
+
+//        dump_mqd(cq_args.mqd_hva);
         if (ioctl(kfd_fd, KFD_IOC_VM_CREATE_QUEUE, &cq_args) < 0) {
             printf("KFD_IOC_VM_CREATE_QUEUE fail\n");
             status = VIRTIO_KFD_S_IOERR;
         }
 
+//        dump_mqd(identical_mapping_space);
+//        dump_mqd(cq_args.mqd_hva);
+
         printf("queue_id=%d\n", cq_args.args.queue_id);
         printf("doorbell_address=0x%llx\n", cq_args.args.doorbell_address);
+//        debug_doorbell = cq_args.args.doorbell_address;
         iov_from_buf(&req->param, 1, 0, &cq_args.args, sizeof(cq_args.args));
 
         break;
@@ -1146,6 +1210,29 @@ void virtio_kfd_handle_request(VirtIOKfdReq *req)
         if(ret == -1)
             status = VIRTIO_KFD_S_IOERR;
         break;
+    case VIRTKFD_KICK_DOORBELL:
+        printf("VIRTKFD_KICK_DOORBELL\n");
+        uint64_t doorbell_region_gpa, doorbell_region_hva;
+        size_t vm_process_doorbell_region_size = VM_PROCESS_DOORBELL_REGION_SIZE;
+
+        iov_to_buf(&req->param, 1, 0, &doorbell_region_gpa, sizeof(doorbell_region_gpa));
+        doorbell_region_hva = cpu_physical_memory_map(doorbell_region_gpa, &vm_process_doorbell_region_size, 1);
+        printf("gpa=%llx, hva=%llx\n", doorbell_region_gpa, doorbell_region_hva); 
+        printf("debug_doorbell=%llx\n", debug_doorbell);
+//        *(uint32_t*)debug_doorbell = 16;
+//        ioctl(kfd_fd, KFD_IOC_DEBUG_DOORBELL_VALUE);
+        
+        // FIXME: debug
+//        dump_mqd(identical_mapping_space);
+
+        ioctl(kfd_fd, KFD_IOC_KICK_DOORBELL2);
+
+        // FIXME: debug
+//        dump_mqd(identical_mapping_space);
+
+        if(ret == -1)
+            status = VIRTIO_KFD_S_IOERR;
+        break;
     default:
         printf("Known command\n");
         status = VIRTIO_KFD_S_UNSUPP;
@@ -1280,6 +1367,7 @@ static void virtio_kfd_set_status(VirtIODevice *vdev, uint8_t status)
     int ret;
 
     if ((status&VIRTIO_CONFIG_S_DRIVER) && !(status&VIRTIO_CONFIG_S_DRIVER_OK)) {
+        printf("open /dev/kfd\n");
         // open host KFD
         kfd_fd = open("/dev/kfd", O_RDWR);
         if (kfd_fd == -1) 
@@ -1297,9 +1385,9 @@ static void virtio_kfd_set_status(VirtIODevice *vdev, uint8_t status)
     
         for(node=0; node<sys_info.node_count; node++) {
             gpu_id = sys_info.topology_device[node].gpu_id;
-            printf("KFD_IOC_SET_IOMMU_NESTED_CR3 %d\n", gpu_id); 
-            if (ioctl(kfd_fd, KFD_IOC_SET_IOMMU_NESTED_CR3, &gpu_id) < 0)
-                printf("KFD_IOC_SET_IOMMU_NESTED_CR3 fail, %d\n", gpu_id);
+            printf("KFD_IOC_IOMMU_ENABLE_NESTED_TRANSLATION %d\n", gpu_id); 
+            if (ioctl(kfd_fd, KFD_IOC_IOMMU_ENABLE_NESTED_TRANSLATION, &gpu_id) < 0)
+                printf("KFD_IOC_IOMMU_ENABLE_NESTED_TRANSLATION fail, %d\n", gpu_id);
         }
     }
 

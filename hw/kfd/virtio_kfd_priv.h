@@ -1,6 +1,8 @@
 #ifndef VIRTIO_KFD_PRIV_H
 #define VIRTIO_KFD_PRIV_H
 
+#include <linux/kfd_ioctl.h>
+
 #define GPA_TO_HVA_MASK 0xffffffff
 
 #define KFD_TOPOLOGY_PUBLIC_NAME_SIZE 128
@@ -35,6 +37,8 @@
 #define VIRTKFD_WAIT_EVENTS             22
 #define VIRTKFD_OPEN_GRAPHIC_HANDLE     23
 #define VIRTKFD_MMAP_DOORBELL_REGION    24
+// FIXME: debug
+#define VIRTKFD_KICK_DOORBELL           99
 
 /*
     This file must sync with virtio_kfd_priv.h
@@ -128,6 +132,12 @@ struct virtkfd_sysfs_info {
     uint32_t                         node_count;
     struct virtkfd_topology_device   topology_device[PROPERTIES_NODE_MAX];          // for node_show
     struct virtkfd_system_properties system_properties;                             // for sysprops_show
+};
+
+struct virtkfd_ioctl_create_queue_args {
+    struct kfd_ioctl_create_queue_args args;
+    uint64_t mqd_gva;
+    uint64_t mqd_gpa;
 };
 
 #endif

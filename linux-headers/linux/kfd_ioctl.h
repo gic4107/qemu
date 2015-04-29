@@ -231,17 +231,17 @@ struct kfd_ioctl_open_graphic_handle_args {
 #define KFD_IOC_WAIT_EVENTS     _IOWR(KFD_IOC_MAGIC, 20, struct kfd_ioctl_wait_events_args)
 #define KFD_IOC_OPEN_GRAPHIC_HANDLE _IOWR(KFD_IOC_MAGIC, 21, struct kfd_ioctl_open_graphic_handle_args)
 
-// Data structure for vm_process
-
 struct vm_process_info {
     uint64_t vm_task;
-    uint64_t vm_mm;
+    uint64_t vm_mm; 
     uint64_t vm_pgd_gpa;
 };
 
 struct kfd_ioctl_vm_create_queue_args {
     struct kfd_ioctl_create_queue_args args;
     uint64_t vm_mm;
+    uint64_t mqd_gva;
+    uint64_t mqd_hva;
 };
 
 struct kfd_ioctl_vm_destroy_queue_args {
@@ -366,7 +366,17 @@ struct kfd_ioctl_vm_open_graphic_handle_args {
 #define KFD_IOC_VM_CLOSE_PROCESS  	_IOW(KFD_IOC_MAGIC, 88, uint64_t)
 #define KFD_IOC_VM_VIRTIO_BE_BIND_VM_PROCESS      _IOW(KFD_IOC_MAGIC, 89, uint64_t)
 #define KFD_IOC_VM_VIRTIO_BE_UNBIND_VM_PROCESS    _IO(KFD_IOC_MAGIC, 90)
-#define KFD_IOC_SET_IOMMU_NESTED_CR3              _IOW(KFD_IOC_MAGIC, 91, uint32_t)
+#define KFD_IOC_IOMMU_ENABLE_NESTED_TRANSLATION              _IOW(KFD_IOC_MAGIC, 91, uint32_t)
+#define KFD_IOC_DEBUG_DOORBELL_VALUE              _IO(KFD_IOC_MAGIC, 92)
+#define KFD_IOC_WALK_PAGE_TABLE              _IOW(KFD_IOC_MAGIC, 93, uint64_t)
+#define KFD_IOC_CLEAR_PAGE              _IOW(KFD_IOC_MAGIC, 94, uint64_t)
+#define KFD_IOC_WALK_RWPTR               _IO(KFD_IOC_MAGIC, 95)
+#define KFD_IOC_KICK_DOORBELL1               _IO(KFD_IOC_MAGIC, 96)
+#define KFD_IOC_KICK_DOORBELL2               _IO(KFD_IOC_MAGIC, 97)
+#define KFD_IOC_VM_IDENTICAL_HVA_SPACE          _IOW(KFD_IOC_MAGIC, 98, uint64_t)
+#define KFD_IOC_SET_IN_BUF          _IOW(KFD_IOC_MAGIC, 100, uint64_t)
+#define KFD_IOC_SET_OUT_BUF         _IOW(KFD_IOC_MAGIC, 99, uint64_t)
+#define KFD_IOC_DUMP_MQD            _IOW(KFD_IOC_MAGIC, 101, uint64_t)
 
 #pragma pack(pop)
 

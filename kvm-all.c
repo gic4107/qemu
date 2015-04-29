@@ -216,6 +216,8 @@ static int kvm_set_user_memory_region(KVMState *s, KVMSlot *slot)
         mem.flags |= KVM_MEM_LOG_DIRTY_PAGES;
     }
 
+//    printf("kvm_set_user_memory_region: slot %d, gpa %llx, hva %llx\n",
+//                       mem.slot, mem.guest_phys_addr, mem.userspace_addr);
     if (slot->memory_size && mem.flags & KVM_MEM_READONLY) {
         /* Set the slot size to 0 before setting the slot to the desired
          * value. This is needed based on KVM commit 75d61fbc. */

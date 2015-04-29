@@ -126,6 +126,7 @@ void virtio_iommu_handle_request(VirtIOIommuReq *req)
     unsigned out_num = req->elem.out_num;
     struct vm_mmu_notification mmu;
     int status = VIRTIO_IOMMU_S_OK; 
+    uint64_t gpa;
     int ret = 0;
 
 //    printf("virtio_iommu_handle_request ... in_num=%d out_num=%d\n", in_num, out_num);
@@ -177,8 +178,9 @@ void virtio_iommu_handle_request(VirtIOIommuReq *req)
         break;
 
     case VIRTIO_IOMMU_VM_FINISH_PPR:
-        printf("VIRTIO_IOMMU_VM_FINISH_PPR\n");
-        ret = ioctl(iommu_vm_ppr_fd, IVP_IOC_VM_FINISH_PPR);
+        iov_to_buf(&req->param, 1, 0, &gpa, sizeof(gpa));
+        printf("VIRTIO_IOMMU_VM_FINISH_PPR, gpa=%llx\n", gpa);
+        ret = ioctl(iommu_vm_ppr_fd, IVP_IOC_VM_FINISH_PPR, &gpa);
         if (ret < 0) {
             printf("!!! VIRTIO_IOMMU_VM_FINISH_PPR fail, %d\n", ret);
             status = VIRTIO_IOMMU_S_IOERR;
@@ -188,17 +190,18 @@ void virtio_iommu_handle_request(VirtIOIommuReq *req)
     case VIRTIO_IOMMU_CLEAR_FLUSH_YOUNG:
         printf("VIRTIO_IOMMU_CLEAR_FLUSH_YOUNG\n");
         iov_to_buf(&req->param, 1, 0, &mmu, sizeof(mmu));
-        printf("mm=0x%llx, addr=0x%llx\n", mmu.mm, mmu.address);
+        printf("mm=0x%llx, addr=0x%llx\n", mmu.mm, mmu.start);
         ret = ioctl(iommu_vm_ppr_fd, IVP_IOC_MMU_CLEAR_FLUSH_YOUNG, &mmu);
         if (ret < 0) {
             printf("!!! VIRTIO_IOMMU_CLEAR_FLUSH_YOUNG fail, %d\n", ret);
             status = VIRTIO_IOMMU_S_IOERR;
         }
         break;
+
     case VIRTIO_IOMMU_CHANGE_PTE:
         printf("VIRTIO_IOMMU_CHANGE_PTE\n");
         iov_to_buf(&req->param, 1, 0, &mmu, sizeof(mmu));
-        printf("mm=0x%llx, addr=0x%llx\n", mmu.mm, mmu.address);
+        printf("mm=0x%llx, addr=0x%llx\n", mmu.mm, mmu.start);
         ret = ioctl(iommu_vm_ppr_fd, IVP_IOC_MMU_CHANGE_PTE, &mmu);
         if (ret < 0) {
             printf("!!! VIRTIO_IOMMU_CHANGE_PTE fail, %d\n", ret);
@@ -206,21 +209,10 @@ void virtio_iommu_handle_request(VirtIOIommuReq *req)
         }
         break;
 
-    case VIRTIO_IOMMU_INVALIDATE_PAGE:
-        printf("VIRTIO_IOMMU_INVALIDATE_PAGE\n");
-        iov_to_buf(&req->param, 1, 0, &mmu, sizeof(mmu));
-        printf("mm=0x%llx, addr=0x%llx\n", mmu.mm, mmu.address);
-        ret = ioctl(iommu_vm_ppr_fd, IVP_IOC_MMU_INVALIDATE_PAGE, &mmu);
-        if (ret < 0) {
-            printf("!!! VIRTIO_IOMMU_INVALIDATE_PAGE fail, %d\n", ret);
-            status = VIRTIO_IOMMU_S_IOERR;
-        }
-        break;
-
     case VIRTIO_IOMMU_INVALIDATE_RANGE_START:
         printf("VIRTIO_IOMMU_INVALIDATE_RANGE_START\n");
         iov_to_buf(&req->param, 1, 0, &mmu, sizeof(mmu));
-        printf("mm=0x%llx, addr=0x%llx\n", mmu.mm, mmu.address);
+        printf("mm=0x%llx, start=0x%llx, end=0x%llx\n", mmu.mm, mmu.start, mmu.end);
         ret = ioctl(iommu_vm_ppr_fd, IVP_IOC_MMU_INVALIDATE_RANGE_START, &mmu);
         if (ret < 0) {
             printf("!!! VIRTIO_IOMMU_INVALIDATE_RANGE_START fail, %d\n", ret);
