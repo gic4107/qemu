@@ -301,6 +301,7 @@ static void cpu_common_realizefn(DeviceState *dev, Error **errp)
 {
     CPUState *cpu = CPU(dev);
 
+//    printf("cpu_common_realizefn\n"); // here
     if (dev->hotplugged) {
         cpu_synchronize_post_init(cpu);
         notifier_list_notify(&cpu_added_notifiers, dev);

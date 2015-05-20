@@ -2021,7 +2021,6 @@ int kvm_arch_put_registers(CPUState *cpu, int level)
     if (ret < 0) {
         return ret;
     }
-    ret = kvm_put_sregs(x86_cpu);
     if (ret < 0) {
         return ret;
     }

@@ -240,8 +240,8 @@ struct vm_process_info {
 struct kfd_ioctl_vm_create_queue_args {
     struct kfd_ioctl_create_queue_args args;
     uint64_t vm_mm;
-    uint64_t mqd_gva;
-    uint64_t mqd_hva;
+//    uint64_t mqd_gva;
+//    uint64_t mqd_hva;
 };
 
 struct kfd_ioctl_vm_destroy_queue_args {
@@ -339,6 +339,12 @@ struct kfd_ioctl_vm_open_graphic_handle_args {
     uint64_t vm_mm; 
 };
 
+// for identical mapping
+struct kfd_ioctl_vm_identical_mapping_space_args {
+    uint64_t identical_hva_start;
+    int num_pages;
+};
+
 // IOCTL cmds for virtualization
 #define KFD_IOC_VM_GET_VERSION		_IOR(KFD_IOC_MAGIC, 65, struct kfd_ioctl_vm_get_version_args)
 #define KFD_IOC_VM_CREATE_QUEUE		_IOWR(KFD_IOC_MAGIC, 66, struct kfd_ioctl_vm_create_queue_args)
@@ -373,7 +379,7 @@ struct kfd_ioctl_vm_open_graphic_handle_args {
 #define KFD_IOC_WALK_RWPTR               _IO(KFD_IOC_MAGIC, 95)
 #define KFD_IOC_KICK_DOORBELL1               _IO(KFD_IOC_MAGIC, 96)
 #define KFD_IOC_KICK_DOORBELL2               _IO(KFD_IOC_MAGIC, 97)
-#define KFD_IOC_VM_IDENTICAL_HVA_SPACE          _IOW(KFD_IOC_MAGIC, 98, uint64_t)
+#define KFD_IOC_VM_IDENTICAL_MAPPING_SPACE          _IOW(KFD_IOC_MAGIC, 98, uint64_t)
 #define KFD_IOC_SET_IN_BUF          _IOW(KFD_IOC_MAGIC, 100, uint64_t)
 #define KFD_IOC_SET_OUT_BUF         _IOW(KFD_IOC_MAGIC, 99, uint64_t)
 #define KFD_IOC_DUMP_MQD            _IOW(KFD_IOC_MAGIC, 101, uint64_t)

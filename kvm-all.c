@@ -1679,6 +1679,7 @@ void kvm_cpu_synchronize_post_reset(CPUState *cpu)
 
 void kvm_cpu_synchronize_post_init(CPUState *cpu)
 {
+//    printf("kvm_cpu_synchronize_post_init\n");      // here
     kvm_arch_put_registers(cpu, KVM_PUT_FULL_STATE);
     cpu->kvm_vcpu_dirty = false;
 }

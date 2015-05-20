@@ -36,7 +36,8 @@
 #define SHADOW_PROCESS_NUM 100
 #define COMMAND_LEN 100
 
-#define MQD_IOMMU 1
+#define IDENTICAL_MAPPING 1
+//#define MQD_IOMMU 1
 
 static int kfd_fd;
 // FIXME: debug
@@ -48,7 +49,10 @@ static struct shadow_process shadow_processes[SHADOW_PROCESS_NUM];
 static int shadow_process_count;
 struct virtkfd_sysfs_info sys_info;
 
+#ifdef IDENTICAL_MAPPING
+#define IDENTICAL_MAPPING_PAGE_NUM 10
 void *identical_mapping_space;
+#endif
 
 // FIXME: debug
 void dump_mqd(void *mqd)
@@ -984,18 +988,21 @@ void virtio_kfd_handle_request(VirtIOKfdReq *req)
         uint64_t rptr_gpa, rptr_hva;
         uint64_t wptr_gpa, wptr_hva;
         uint32_t gpu_id;
-        uint64_t identical_hva;
         size_t ptr_size = sizeof(uint64_t);
+#ifdef IDENTICAL_MAPPING
+        struct kfd_ioctl_vm_identical_mapping_space_args im_args; 
 
         // region for guest mqd identical mapping
-        identical_mapping_space = valloc(4096);
-        memset(identical_mapping_space, 0, 4096);
-        identical_hva = (uint64_t)identical_mapping_space;
-        printf("identical_hva=%llx\n", identical_hva);
-        if (ioctl(kfd_fd, KFD_IOC_VM_IDENTICAL_HVA_SPACE, &identical_hva) < 0) {
-            printf("KFD_IOC_VM_IDENTICAL_HVA_SPACE fail\n");
+        identical_mapping_space = valloc(4096*IDENTICAL_MAPPING_PAGE_NUM);
+        memset(identical_mapping_space, 0, 4096*IDENTICAL_MAPPING_PAGE_NUM);
+        im_args.identical_hva_start = (uint64_t)identical_mapping_space;
+        im_args.num_pages = IDENTICAL_MAPPING_PAGE_NUM;
+        printf("identical_hva_start=%llx\n", im_args.identical_hva_start);
+        if (ioctl(kfd_fd, KFD_IOC_VM_IDENTICAL_MAPPING_SPACE, &im_args) < 0) {
+            printf("KFD_IOC_VM_IDENTICAL_MAPPING_SPACE fail\n");
             status = VIRTIO_KFD_S_IOERR;
         }
+#endif
 
         // create queue
 #ifdef MQD_IOMMU
