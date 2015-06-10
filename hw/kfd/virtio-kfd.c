@@ -36,7 +36,7 @@
 #define SHADOW_PROCESS_NUM 100
 #define COMMAND_LEN 100
 
-#define IDENTICAL_MAPPING 1
+//#define IDENTICAL_MAPPING 1
 //#define MQD_IOMMU 1
 
 static int kfd_fd;
@@ -1390,12 +1390,13 @@ static void virtio_kfd_set_status(VirtIODevice *vdev, uint8_t status)
         if (kvm_vm_ioctl(kvm_state, KVM_HSA_BIND_KFD_VIRTIO_BE) < 0) 
             printf("KVM_HSA_BIND_KFD_VIRTIO_BE fail\n");
     
-        for(node=0; node<sys_info.node_count; node++) {
+/*        for(node=0; node<sys_info.node_count; node++) {
             gpu_id = sys_info.topology_device[node].gpu_id;
             printf("KFD_IOC_IOMMU_ENABLE_NESTED_TRANSLATION %d\n", gpu_id); 
             if (ioctl(kfd_fd, KFD_IOC_IOMMU_ENABLE_NESTED_TRANSLATION, &gpu_id) < 0)
                 printf("KFD_IOC_IOMMU_ENABLE_NESTED_TRANSLATION fail, %d\n", gpu_id);
         }
+*/
     }
 
     if (!(status & VIRTIO_CONFIG_S_DRIVER_OK)) {
