@@ -1018,25 +1018,27 @@ void virtio_kfd_handle_request(VirtIOKfdReq *req)
         cq_args.vm_mm   = req->out.vm_mm;
 
         gpu_id   = cq_args.args.gpu_id;
-        ring_gpa = cq_args.args.ring_base_address;
-        rptr_gpa = cq_args.args.read_pointer_address;
-        wptr_gpa = cq_args.args.write_pointer_address;
+//        ring_gpa = cq_args.args.ring_base_address;
+//        rptr_gpa = cq_args.args.read_pointer_address;
+//        wptr_gpa = cq_args.args.write_pointer_address;
         
-        ring_hva = cpu_physical_memory_map(ring_gpa, &ptr_size, 1);
-        rptr_hva = cpu_physical_memory_map(rptr_gpa, &ptr_size, 1);
-        wptr_hva = cpu_physical_memory_map(wptr_gpa, &ptr_size, 1);
-        if (ptr_size != sizeof(uint64_t))
-            printf("!!! ptr translate fail\n");
+//        ring_hva = cpu_physical_memory_map(ring_gpa, &ptr_size, 1);
+//        rptr_hva = cpu_physical_memory_map(rptr_gpa, &ptr_size, 1);
+//        wptr_hva = cpu_physical_memory_map(wptr_gpa, &ptr_size, 1);
+//        if (ptr_size != sizeof(uint64_t))
+//            printf("!!! ptr translate fail\n");
 
-        printf("ring=%d, wprtr=%d, rptr=%d\n", *(int*)ring_hva, *(int*)wptr_hva, *(int*)rptr_hva);
+//        printf("ring=%d, wprtr=%d, rptr=%d\n", *(int*)ring_hva, *(int*)wptr_hva, *(int*)rptr_hva);
 //        cq_args.args.ring_base_address     = ring_hva;
 //        cq_args.args.read_pointer_address  = rptr_hva;
 //        cq_args.args.write_pointer_address = wptr_hva;
 
+        printf("ring=%llx, rptr=%llx, wptr=%llx\n", cq_args.args.ring_base_address,
+                    cq_args.args.read_pointer_address, cq_args.args.write_pointer_address);
         printf("gpu_id=%d\n", gpu_id);
 //        printf("ring: %llx->%llx\n", ring_gpa, ring_hva);
-        printf("rptr: %llx->%llx\n", rptr_gpa, rptr_hva);
-        printf("wptr: %llx->%llx\n", wptr_gpa, wptr_hva);
+//        printf("rptr: %llx->%llx\n", rptr_gpa, rptr_hva);
+//        printf("wptr: %llx->%llx\n", wptr_gpa, wptr_hva);
 
 //        dump_mqd(cq_args.mqd_hva);
         if (ioctl(kfd_fd, KFD_IOC_VM_CREATE_QUEUE, &cq_args) < 0) {
