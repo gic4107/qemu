@@ -1043,6 +1043,7 @@ struct kvm_s390_ucas_mapping {
 /* ioctl for HSA virtualization */
 #define KVM_HSA_SET_IOMMU_NESTED_CR3 _IOW(KVMIO, 0xd0, __u32)
 #define KVM_HSA_BIND_KFD_VIRTIO_BE   _IO(KVMIO, 0xd1) 
+#define KVM_HSA_SET_DEBUG_GVA        _IOW(KVMIO, 0xd2, uint64_t)
 
 /* ioctl for vm fd */
 #define KVM_CREATE_DEVICE	  _IOWR(KVMIO,  0xe0, struct kvm_create_device)

@@ -88,7 +88,6 @@ virtio_iommu_mmap_ppr_region(struct iovec *ppr_region)
 
     // get vm_mm from front-end
     iov_to_buf(ppr_region, 1, 0, &vm_ppr_region_gpa, sizeof(vm_ppr_region_gpa));
-//    vm_ppr_region_gpa &= GPA_TO_HVA_MASK; 
 
     vm_ppr_region_hva = cpu_physical_memory_map(vm_ppr_region_gpa, &vm_ppr_region_size, 1);
     if(vm_ppr_region_size != VM_PPR_REGION_SIZE) {
@@ -126,13 +125,8 @@ void virtio_iommu_handle_request(VirtIOIommuReq *req)
     unsigned out_num = req->elem.out_num;
     struct vm_mmu_notification mmu;
     int status = VIRTIO_IOMMU_S_OK; 
-    uint64_t gpa;
+    int head;
     int ret = 0;
-
-//    printf("virtio_iommu_handle_request ... in_num=%d out_num=%d\n", in_num, out_num);
-//    printf("out_iov[0]: base=%p, len=%d\n", iov[0].iov_base, iov[0].iov_len);
-//    printf("in_iov[0]: base=%p, len=%d\n", in_iov[0].iov_base, in_iov[0].iov_len);
-//    printf("in_iov[1]: base=%p, len=%d\n", in_iov[1].iov_base, in_iov[1].iov_len);
 
     if (req->elem.out_num < 1 || req->elem.in_num < 1) {
         error_report("virtio-iommu missing headers");
@@ -178,9 +172,8 @@ void virtio_iommu_handle_request(VirtIOIommuReq *req)
         break;
 
     case VIRTIO_IOMMU_VM_FINISH_PPR:
-        iov_to_buf(&req->param, 1, 0, &gpa, sizeof(gpa));
-        printf("VIRTIO_IOMMU_VM_FINISH_PPR, gpa=%llx\n", gpa);
-        ret = ioctl(iommu_vm_ppr_fd, IVP_IOC_VM_FINISH_PPR, &gpa);
+        iov_to_buf(&req->param, 1, 0, &head, sizeof(head));
+        ret = ioctl(iommu_vm_ppr_fd, IVP_IOC_VM_FINISH_PPR, &head);
         if (ret < 0) {
             printf("!!! VIRTIO_IOMMU_VM_FINISH_PPR fail, %d\n", ret);
             status = VIRTIO_IOMMU_S_IOERR;

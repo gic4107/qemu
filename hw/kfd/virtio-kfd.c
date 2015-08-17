@@ -36,9 +36,6 @@
 #define SHADOW_PROCESS_NUM 100
 #define COMMAND_LEN 100
 
-//#define IDENTICAL_MAPPING 1
-//#define MQD_IOMMU 1
-
 static int kfd_fd;
 // FIXME: debug
 uint64_t debug_doorbell;
@@ -368,14 +365,8 @@ static int virtkfd_create_vm_process(struct iovec *param)
     return 1;
 }
 
-static int virtkfd_close_vm_process(struct iovec *param)
+static int virtkfd_close_vm_process(uint64_t vm_mm)
 {
-    uint64_t vm_mm;
-
-    // get vm_mm from front-end
-    iov_to_buf(param, 1, 0, &vm_mm, sizeof(vm_mm));
-    printf("vm_mm=0x%llx\n", vm_mm); 
-
     if (free_vm_process(vm_mm) < 0) {
         printf("vm processes not exist\n");
         return -1;
@@ -918,30 +909,17 @@ void virtio_kfd_handle_request(VirtIOKfdReq *req)
     unsigned out_num = req->elem.out_num;
     int status = VIRTIO_KFD_S_OK; 
     int ret = VIRTIO_KFD_S_OK;
-
-//    printf("virtio_kfd_handle_request ... in_num=%d out_num=%d\n", in_num, out_num);
-//    printf("out_iov[0]: base=%p, len=%d\n", iov[0].iov_base, iov[0].iov_len);
-//    printf("in_iov[0]: base=%p, len=%d\n", in_iov[0].iov_base, in_iov[0].iov_len);
-//    printf("in_iov[1]: base=%p, len=%d\n", in_iov[1].iov_base, in_iov[1].iov_len);
+    struct kfd_ioctl_vm_get_clock_counters_args cc_args;
 
     if (req->elem.out_num < 1 || req->elem.in_num < 1) {
         error_report("virtio-kfd missing headers");
         exit(1);
     }
 
-/*    if (unlikely(iov_to_buf(iov, out_num, 0, &req->out,         // copy vring data into req->out
-                            sizeof(req->out)) != sizeof(req->out))) {
-        error_report("virtio-kfd request outhdr too short");
-        exit(1);
-    }
-*/
     iov_to_buf(&iov[0], 1, 0, &req->out.cmd, sizeof(int));
     iov_to_buf(&iov[1], 1, 0, &req->out.vm_mm, sizeof(uint64_t));
     printf("virtio_kfd_handle_request: command=%d, vm_mm=0x%llx\n", req->out.cmd, req->out.vm_mm); 
      
-
-//    iov_discard_front(&iov, &out_num, sizeof(req->out));
-
     if (in_num < 1 ||
         in_iov[in_num - 1].iov_len < sizeof(struct virtio_kfd_inhdr)) {
         error_report("virtio-kfd request inhdr too short");
@@ -952,7 +930,6 @@ void virtio_kfd_handle_request(VirtIOKfdReq *req)
     req->in = (void *)in_iov[in_num - 1].iov_base   // status
               + in_iov[in_num - 1].iov_len
               - sizeof(struct virtio_kfd_inhdr);
-//    iov_discard_back(in_iov, &in_num, sizeof(struct virtio_kfd_inhdr));
 
     switch(req->out.cmd) {
     case VIRTKFD_OPEN:
@@ -964,7 +941,7 @@ void virtio_kfd_handle_request(VirtIOKfdReq *req)
 
     case VIRTKFD_CLOSE:
         printf("VIRTKFD_CLOSE\n");
-        ret = virtkfd_close_vm_process(&req->param);
+        ret = virtkfd_close_vm_process(req->out.vm_mm);
         break;
 
     case VIRTKFD_GET_SYSINFO:
@@ -981,77 +958,27 @@ void virtio_kfd_handle_request(VirtIOKfdReq *req)
     case VIRTKFD_CREATE_QUEUE:
         printf("VIRTKFD_CREATE_QUEUE\n");
         struct kfd_ioctl_vm_create_queue_args cq_args;
-#ifdef MQD_IOMMU
-        struct virtkfd_ioctl_create_queue_args vcq_args;
-#endif
         uint64_t ring_gpa, ring_hva;
         uint64_t rptr_gpa, rptr_hva;
         uint64_t wptr_gpa, wptr_hva;
         uint32_t gpu_id;
         size_t ptr_size = sizeof(uint64_t);
-#ifdef IDENTICAL_MAPPING
-        struct kfd_ioctl_vm_identical_mapping_space_args im_args; 
-
-        // region for guest mqd identical mapping
-        identical_mapping_space = valloc(4096*IDENTICAL_MAPPING_PAGE_NUM);
-        memset(identical_mapping_space, 0, 4096*IDENTICAL_MAPPING_PAGE_NUM);
-        im_args.identical_hva_start = (uint64_t)identical_mapping_space;
-        im_args.num_pages = IDENTICAL_MAPPING_PAGE_NUM;
-        printf("identical_hva_start=%llx\n", im_args.identical_hva_start);
-        if (ioctl(kfd_fd, KFD_IOC_VM_IDENTICAL_MAPPING_SPACE, &im_args) < 0) {
-            printf("KFD_IOC_VM_IDENTICAL_MAPPING_SPACE fail\n");
-            status = VIRTIO_KFD_S_IOERR;
-        }
-#endif
 
         // create queue
-#ifdef MQD_IOMMU
-        iov_to_buf(&req->param, 1, 0, &vcq_args, sizeof(vcq_args));
-        memcpy(&cq_args.args, &vcq_args.args, sizeof(struct kfd_ioctl_create_queue_args));
-        cq_args.mqd_gva = vcq_args.mqd_gva;
-        cq_args.mqd_hva = cpu_physical_memory_map(vcq_args.mqd_gpa, &ptr_size, 1);
-        printf("mqd_gva=%llx, mqd_gpa=%llx, mqd_hva=%llx\n", cq_args.mqd_gva,
-                                             vcq_args.mqd_gpa, cq_args.mqd_hva);
-#else
         iov_to_buf(&req->param, 1, 0, &cq_args.args, sizeof(cq_args.args));
-#endif
         cq_args.vm_mm   = req->out.vm_mm;
 
         gpu_id   = cq_args.args.gpu_id;
-//        ring_gpa = cq_args.args.ring_base_address;
-//        rptr_gpa = cq_args.args.read_pointer_address;
-//        wptr_gpa = cq_args.args.write_pointer_address;
-        
-//        ring_hva = cpu_physical_memory_map(ring_gpa, &ptr_size, 1);
-//        rptr_hva = cpu_physical_memory_map(rptr_gpa, &ptr_size, 1);
-//        wptr_hva = cpu_physical_memory_map(wptr_gpa, &ptr_size, 1);
-//        if (ptr_size != sizeof(uint64_t))
-//            printf("!!! ptr translate fail\n");
-
-//        printf("ring=%d, wprtr=%d, rptr=%d\n", *(int*)ring_hva, *(int*)wptr_hva, *(int*)rptr_hva);
-//        cq_args.args.ring_base_address     = ring_hva;
-//        cq_args.args.read_pointer_address  = rptr_hva;
-//        cq_args.args.write_pointer_address = wptr_hva;
-
         printf("ring=%llx, rptr=%llx, wptr=%llx\n", cq_args.args.ring_base_address,
                     cq_args.args.read_pointer_address, cq_args.args.write_pointer_address);
         printf("gpu_id=%d\n", gpu_id);
-//        printf("ring: %llx->%llx\n", ring_gpa, ring_hva);
-//        printf("rptr: %llx->%llx\n", rptr_gpa, rptr_hva);
-//        printf("wptr: %llx->%llx\n", wptr_gpa, wptr_hva);
-
-//        dump_mqd(cq_args.mqd_hva);
         if (ioctl(kfd_fd, KFD_IOC_VM_CREATE_QUEUE, &cq_args) < 0) {
             printf("KFD_IOC_VM_CREATE_QUEUE fail\n");
             status = VIRTIO_KFD_S_IOERR;
         }
 
-//        dump_mqd(identical_mapping_space);
-//        dump_mqd(cq_args.mqd_hva);
-
         printf("queue_id=%d\n", cq_args.args.queue_id);
         printf("doorbell_address=0x%llx\n", cq_args.args.doorbell_address);
-//        debug_doorbell = cq_args.args.doorbell_address;
         iov_from_buf(&req->param, 1, 0, &cq_args.args, sizeof(cq_args.args));
 
         break;
@@ -1085,9 +1012,6 @@ void virtio_kfd_handle_request(VirtIOKfdReq *req)
 
         break;
     case VIRTKFD_GET_CLOCK_COUNTERS:
-        printf("VIRTKFD_GET_CLOCK_COUNTERS\n");
-        struct kfd_ioctl_vm_get_clock_counters_args cc_args;
-
         iov_to_buf(&req->param, 1, 0, &cc_args.args, sizeof(cc_args.args));
         cc_args.vm_mm = req->out.vm_mm;
 
@@ -1228,20 +1152,22 @@ void virtio_kfd_handle_request(VirtIOKfdReq *req)
         doorbell_region_hva = cpu_physical_memory_map(doorbell_region_gpa, &vm_process_doorbell_region_size, 1);
         printf("gpa=%llx, hva=%llx\n", doorbell_region_gpa, doorbell_region_hva); 
         printf("debug_doorbell=%llx\n", debug_doorbell);
-//        *(uint32_t*)debug_doorbell = 16;
-//        ioctl(kfd_fd, KFD_IOC_DEBUG_DOORBELL_VALUE);
-        
-        // FIXME: debug
-//        dump_mqd(identical_mapping_space);
-
-        ioctl(kfd_fd, KFD_IOC_KICK_DOORBELL2);
-
-        // FIXME: debug
-//        dump_mqd(identical_mapping_space);
 
         if(ret == -1)
             status = VIRTIO_KFD_S_IOERR;
         break;
+    // debug
+    case VIRTKFD_DEBUG_GVA:
+        printf("VIRTKFD_DEBUG_GVA\n");
+        uint64_t debug_gva;
+        iov_to_buf(&req->param, 1, 0, &debug_gva, sizeof(debug_gva));
+        printf("debug_gva=%llx\n", debug_gva);
+        if (kvm_vm_ioctl(kvm_state, KVM_HSA_SET_DEBUG_GVA, &debug_gva) < 0) {
+            printf("KVM_HSA_SET_DEBUG_GVA fail\n");
+            status = VIRTIO_KFD_S_IOERR;
+        }
+        break;
+        
     default:
         printf("Known command\n");
         status = VIRTIO_KFD_S_UNSUPP;

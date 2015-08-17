@@ -37,6 +37,7 @@
 #define VIRTKFD_WAIT_EVENTS             22
 #define VIRTKFD_OPEN_GRAPHIC_HANDLE     23
 #define VIRTKFD_MMAP_DOORBELL_REGION    24
+#define VIRTKFD_DEBUG_GVA               25
 // FIXME: debug
 #define VIRTKFD_KICK_DOORBELL           99
 

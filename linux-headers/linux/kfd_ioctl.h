@@ -241,8 +241,6 @@ struct vm_process_info {
 struct kfd_ioctl_vm_create_queue_args {
     struct kfd_ioctl_create_queue_args args;
     uint64_t vm_mm;
-//    uint64_t mqd_gva;
-//    uint64_t mqd_hva;
 };
 
 struct kfd_ioctl_vm_destroy_queue_args {
